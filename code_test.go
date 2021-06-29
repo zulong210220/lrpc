@@ -10,9 +10,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"lrpc/client"
 	"lrpc/lcode"
 	"lrpc/rpc"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,6 +64,43 @@ func TestCode(t *testing.T) {
 		_ = cc.ReadBody(&reply)
 		logrus.Infof("%s reply:%v", fun, reply)
 	}
+}
+
+func TestClient(t *testing.T) {
+	fun := "TestClient"
+
+	addr := make(chan string)
+
+	lcode.Init()
+	go testStartServer(addr)
+
+	c, _ := client.Dial("tcp", <-addr, rpc.DefaultOption)
+	defer func() {
+		_ = c.Close()
+	}()
+
+	time.Sleep(time.Second)
+
+	var (
+		wg sync.WaitGroup
+	)
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := fmt.Sprintf("client lllrpc req %d", i)
+			var reply string
+
+			err := c.Call("Foo.Sum", args, &reply)
+			if err != nil {
+				logrus.Errorf("%s call Foo.Sum failed err:%v", fun, err)
+				return
+			}
+			logrus.Infof("%s reply:%v", fun, reply)
+		}(i)
+	}
+	wg.Wait()
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */
