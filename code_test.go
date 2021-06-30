@@ -12,24 +12,23 @@ import (
 	"fmt"
 	"lrpc/client"
 	"lrpc/lcode"
+	"lrpc/log"
 	"lrpc/rpc"
 	"net"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 func testStartServer(addr chan string) {
 	fun := "startServer"
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		logrus.Fatalf("%s network error: %v", fun, err)
+		log.Fatalf("%s network error: %v", fun, err)
 		return
 	}
 
-	logrus.Infof("%s start rpc server on %v", fun, ln.Addr())
+	log.Infof("%s start rpc server on %v", fun, ln.Addr())
 	addr <- ln.Addr().String()
 	rpc.Accept(ln)
 }
@@ -62,7 +61,7 @@ func TestCode(t *testing.T) {
 
 		var reply string
 		_ = cc.ReadBody(&reply)
-		logrus.Infof("%s reply:%v", fun, reply)
+		log.Infof("%s reply:%v", fun, reply)
 	}
 }
 
@@ -72,6 +71,15 @@ func TestClient(t *testing.T) {
 	addr := make(chan string)
 
 	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
 	go testStartServer(addr)
 
 	c, _ := client.Dial("tcp", <-addr, rpc.DefaultOption)
@@ -94,10 +102,10 @@ func TestClient(t *testing.T) {
 
 			err := c.Call("Foo.Sum", args, &reply)
 			if err != nil {
-				logrus.Errorf("%s call Foo.Sum failed err:%v", fun, err)
+				log.Errorf("%s call Foo.Sum failed err:%v", fun, err)
 				return
 			}
-			logrus.Infof("%s reply:%v", fun, reply)
+			log.Infof("%s reply:%v", fun, reply)
 		}(i)
 	}
 	wg.Wait()

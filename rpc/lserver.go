@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"io"
 	"lrpc/lcode"
+	"lrpc/log"
 	"net"
 	"reflect"
 	"sync"
-
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -44,7 +43,7 @@ func (s *Server) Accept(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			logrus.Errorf("%s rpc server accept failed err:%v", fun, err)
+			log.Errorf("%s rpc server accept failed err:%v", fun, err)
 			return
 		}
 
@@ -63,20 +62,20 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	}()
 	var opt Option
 	err := json.NewDecoder(conn).Decode(&opt)
-	logrus.Infof("%s opt:%+v", fun, opt)
+	log.Infof("%s opt:%+v", fun, opt)
 	if err != nil {
-		logrus.Errorf("%s rpc server options error:%v", fun, err)
+		log.Errorf("%s rpc server options error:%v", fun, err)
 		return
 	}
 
 	if opt.MagicNumber != MagicNumber {
-		logrus.Errorf("%s rpc server invalid magic number %x", fun, opt.MagicNumber)
+		log.Errorf("%s rpc server invalid magic number %x", fun, opt.MagicNumber)
 		return
 	}
 
 	f := lcode.NewCodecFuncMap[opt.CodecType]
 	if f == nil {
-		logrus.Errorf("%s rpc server invalid codec type %s", fun, opt.CodecType)
+		log.Errorf("%s rpc server invalid codec type %s", fun, opt.CodecType)
 		return
 	}
 
@@ -122,7 +121,7 @@ func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 	err := cc.ReadHeader(&h)
 	if err != nil {
 		if err != io.EOF && err != io.ErrUnexpectedEOF {
-			logrus.Errorf("%s rpc server read header error:%v", fun, err)
+			log.Errorf("%s rpc server read header error:%v", fun, err)
 		}
 		return nil, err
 	}
@@ -142,7 +141,7 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	req.argv = reflect.New(reflect.TypeOf(""))
 	err = cc.ReadBody(req.argv.Interface())
 	if err != nil {
-		logrus.Errorf("%s rpc server read argv failed err:%v", fun, err)
+		log.Errorf("%s rpc server read argv failed err:%v", fun, err)
 	}
 	return req, err
 }
@@ -154,7 +153,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 	defer sending.Unlock()
 	err := cc.Write(h, body)
 	if err != nil {
-		logrus.Errorf("%s rpc server write response failed error:%v", fun, err)
+		log.Errorf("%s rpc server write response failed error:%v", fun, err)
 	}
 
 }
@@ -162,7 +161,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
 	fun := "Server.handleRequest"
 	defer wg.Done()
-	logrus.Info(fun, " : ", req.h, " : ", req.argv.Elem())
+	log.Info(fun, " : ", req.h, " : ", req.argv.Elem())
 
 	req.replyv = reflect.ValueOf(fmt.Sprintf("lll rpc resp %d", req.h.Seq))
 	s.sendResponse(cc, req.h, req.replyv.Interface(), sending)

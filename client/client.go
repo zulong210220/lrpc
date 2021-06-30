@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"io"
 	"lrpc/lcode"
+	"lrpc/log"
 	"lrpc/rpc"
 	"net"
 	"sync"
 	"sync/atomic"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Call struct {
@@ -115,7 +114,7 @@ func (c *Client) receive() {
 		var h lcode.Header
 		err = c.cc.ReadHeader(&h)
 		if err != nil {
-			logrus.Errorf("%s ReadHeader failed err:%v", fun, err)
+			log.Errorf("%s ReadHeader failed err:%v", fun, err)
 			break
 		}
 
@@ -145,13 +144,13 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 
 	if f == nil {
 		err := fmt.Errorf("%s invalid codec type %s", fun, opt.CodecType)
-		logrus.Errorf("%s rpc client codec err:%v", fun, err)
+		log.Errorf("%s rpc client codec err:%v", fun, err)
 		return nil, err
 	}
 
 	err := json.NewEncoder(conn).Encode(opt)
 	if err != nil {
-		logrus.Errorf("%s rpc client options failed err:%v", fun, err)
+		log.Errorf("%s rpc client options failed err:%v", fun, err)
 		_ = conn.Close()
 		return nil, err
 	}
@@ -195,13 +194,13 @@ func Dial(network, addr string, opts ...*rpc.Option) (c *Client, err error) {
 	fun := "Dial"
 	opt, err := parseOptions(opts...)
 	if err != nil {
-		logrus.Errorf("%s parseOptions failed err:%v", fun, err)
+		log.Errorf("%s parseOptions failed err:%v", fun, err)
 		return nil, err
 	}
 
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		logrus.Errorf("%s net.Dial network:%s addr:%s failed err:%v", fun, network, addr, err)
+		log.Errorf("%s net.Dial network:%s addr:%s failed err:%v", fun, network, addr, err)
 		return nil, err
 	}
 
@@ -221,7 +220,7 @@ func (c *Client) send(ca *Call) {
 
 	seq, err := c.registerCall(ca)
 	if err != nil {
-		logrus.Errorf("%s client registerCall failed err:%v", fun, err)
+		log.Errorf("%s client registerCall failed err:%v", fun, err)
 		ca.Error = err
 		ca.done()
 		return
@@ -243,11 +242,11 @@ func (c *Client) send(ca *Call) {
 
 func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 	fun := "Client.Do"
-	logrus.Infof("%s Do enter done:%d", fun, cap(done))
+	log.Infof("%s Do enter done:%d", fun, cap(done))
 	if done == nil {
 		done = make(chan *Call, 16)
 	} else if cap(done) == 0 {
-		logrus.Errorf("%s rpc client done channel is unbuffered", fun)
+		log.Errorf("%s rpc client done channel is unbuffered", fun)
 	}
 	ca := &Call{
 		ServiceMethod: sm,
