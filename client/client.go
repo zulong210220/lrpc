@@ -113,6 +113,7 @@ func (c *Client) receive() {
 	for err == nil {
 		var h lcode.Header
 		err = c.cc.ReadHeader(&h)
+		// TODO conn关闭会报错
 		if err != nil {
 			log.Errorf("%s ReadHeader failed err:%v", fun, err)
 			break
@@ -210,11 +211,13 @@ func Dial(network, addr string, opts ...*rpc.Option) (c *Client, err error) {
 		}
 	}()
 
-	return NewClient(conn, opt)
+	c, err = NewClient(conn, opt)
+	return
 }
 
 func (c *Client) send(ca *Call) {
 	fun := "Client.send"
+	// 并发发送需要加锁
 	c.sending.Lock()
 	defer c.sending.Unlock()
 
