@@ -2,12 +2,13 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"lrpc/lcode"
 	"lrpc/log"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -29,7 +30,9 @@ var DefaultOption = &Option{
 // | <------      固定 JSON 编码      ------>  | <-------   编码方式由 CodeType 决定   ------->|
 // | Option | Header1 | Body1 | Header2 | Body2 | ...
 
-type Server struct{}
+type Server struct {
+	serviceMap sync.Map
+}
 
 func NewServer() *Server {
 	s := &Server{}
@@ -112,6 +115,8 @@ func (s *Server) serveCodec(cc lcode.Codec) {
 type request struct {
 	h            *lcode.Header
 	argv, replyv reflect.Value
+	mType        *methodType
+	svc          *service
 }
 
 func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
@@ -136,10 +141,21 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	}
 
 	req := &request{h: h}
+	req.svc, req.mType, err = s.findService(h.ServiceMethod)
+	if err != nil {
+		log.Errorf("%s findService failed serviceMethod:%s err:%v", fun, h.ServiceMethod, err)
+		return req, err
+	}
 
 	// TODO
-	req.argv = reflect.New(reflect.TypeOf(""))
-	err = cc.ReadBody(req.argv.Interface())
+	req.argv = req.mType.newArgv()
+	req.replyv = req.mType.newReplyv()
+	argvi := req.argv.Interface()
+	if req.argv.Type().Kind() != reflect.Ptr {
+		argvi = req.argv.Addr().Interface()
+	}
+
+	err = cc.ReadBody(argvi)
 	if err != nil {
 		log.Errorf("%s rpc server read argv failed err:%v", fun, err)
 	}
@@ -163,8 +179,53 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 	defer wg.Done()
 	log.Info(fun, " : ", req.h, " : ", req.argv.Elem())
 
-	req.replyv = reflect.ValueOf(fmt.Sprintf("lll rpc resp %d", req.h.Seq))
+	err := req.svc.call(req.mType, req.argv, req.replyv)
+	if err != nil {
+		req.h.Error = err.Error()
+		s.sendResponse(cc, req.h, invalidRequest, sending)
+		return
+	}
+
 	s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+}
+
+func (s *Server) Register(rcvr interface{}) error {
+	sv := newService(rcvr)
+
+	_, dup := s.serviceMap.LoadOrStore(sv.name, sv)
+	if dup {
+		return errors.New("rpc service already registered: " + sv.name)
+	}
+	return nil
+}
+
+func Register(rcvr interface{}) error {
+	return DefaultServer.Register(rcvr)
+}
+
+func (s *Server) findService(sm string) (svc *service, mType *methodType, err error) {
+	dot := strings.Index(sm, ".")
+	if dot < 0 {
+		err = errors.New("rpc server: service/method request ill-formed: " + sm)
+		return
+	}
+
+	sn, mn := sm[:dot], sm[dot+1:]
+
+	sv, ok := s.serviceMap.Load(sn)
+	if !ok {
+		err = errors.New("rpc server: can't find service: " + sn)
+		return
+	}
+
+	svc = sv.(*service)
+	mType = svc.method[mn]
+
+	if mType == nil {
+		err = errors.New("rpc server: can't find method: " + mn)
+	}
+
+	return
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

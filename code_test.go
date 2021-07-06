@@ -22,6 +22,14 @@ import (
 
 func testStartServer(addr chan string) {
 	fun := "startServer"
+	var f rpc.Foo
+
+	err := rpc.Register(&f)
+	if err != nil {
+		log.Fatalf("%s register failed err:%v", fun, err)
+		return
+	}
+
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		log.Fatalf("%s network error: %v", fun, err)
@@ -106,6 +114,50 @@ func TestClient(t *testing.T) {
 				return
 			}
 			log.Infof("%s reply:%v", fun, reply)
+		}(i)
+	}
+	wg.Wait()
+}
+
+func TestReg(t *testing.T) {
+
+	addr := make(chan string)
+
+	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
+	go testStartServer(addr)
+
+	c, _ := client.Dial("tcp", <-addr, rpc.DefaultOption)
+	defer func() {
+		_ = c.Close()
+	}()
+
+	var (
+		wg sync.WaitGroup
+	)
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			var reply int
+			args := &rpc.Args{Num1: i, Num2: i * i}
+
+			err := c.Call("Foo.Sum", args, &reply)
+			if err != nil {
+				log.Fatalf("call Foo.Sum failed i:%d err:%v", i, err)
+				return
+			}
+			log.Infof("call success %d + %d = %d", args.Num1, args.Num2, reply)
 		}(i)
 	}
 	wg.Wait()
