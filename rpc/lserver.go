@@ -177,7 +177,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
 	fun := "Server.handleRequest"
 	defer wg.Done()
-	log.Info(fun, " : ", req.h, " : ", req.argv.Elem())
+	log.Info(fun, " : ", req.h, " : ", req.argv)
 
 	err := req.svc.call(req.mType, req.argv, req.replyv)
 	if err != nil {
