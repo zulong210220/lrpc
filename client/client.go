@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Call struct {
@@ -192,27 +194,7 @@ func parseOptions(opts ...*rpc.Option) (*rpc.Option, error) {
 }
 
 func Dial(network, addr string, opts ...*rpc.Option) (c *Client, err error) {
-	fun := "Dial"
-	opt, err := parseOptions(opts...)
-	if err != nil {
-		log.Errorf("%s parseOptions failed err:%v", fun, err)
-		return nil, err
-	}
-
-	conn, err := net.Dial(network, addr)
-	if err != nil {
-		log.Errorf("%s net.Dial network:%s addr:%s failed err:%v", fun, network, addr, err)
-		return nil, err
-	}
-
-	defer func() {
-		if c == nil {
-			_ = conn.Close()
-		}
-	}()
-
-	c, err = NewClient(conn, opt)
-	return
+	return dialTimeout(NewClient, network, addr, opts...)
 }
 
 func (c *Client) send(ca *Call) {
@@ -262,7 +244,66 @@ func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 	return ca
 }
 
-func (c *Client) Call(sm string, args, reply interface{}) error {
-	ca := <-c.Do(sm, args, reply, make(chan *Call, 1)).Done
-	return ca.Error
+func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) error {
+	log.Infof("Client.Call ctx enter %v", time.Now())
+	ca := c.Do(sm, args, reply, make(chan *Call, 1))
+	log.Infof("Client.Call ctx after Do %v", time.Now())
+	select {
+	case <-ctx.Done():
+		c.removeCall(ca.Seq)
+		log.Info("case ctx.Done ", time.Now())
+		return fmt.Errorf("rpc client : call failed err:%s", ctx.Err().Error())
+	case cd := <-ca.Done:
+		log.Info("case call.Done ", time.Now())
+		return cd.Error
+	}
+}
+
+type clientResult struct {
+	client *Client
+	err    error
+}
+
+type newClientFunc func(conn net.Conn, opt *rpc.Option) (c *Client, err error)
+
+func dialTimeout(f newClientFunc, network, addr string, opts ...*rpc.Option) (c *Client, err error) {
+	fun := "dialTimeout"
+	opt, err := parseOptions(opts...)
+	if err != nil {
+		log.Errorf("%s parseOptions failed err:%v", fun, err)
+		return nil, err
+	}
+
+	conn, err := net.DialTimeout(network, addr, opt.ConnectTimeout)
+	if err != nil {
+		log.Errorf("%s DialTimeout failed network:%s addr:%s err:%v", fun, network, addr, err)
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			_ = conn.Close()
+		}
+	}()
+
+	ch := make(chan clientResult)
+	go func() {
+		cli, err := f(conn, opt)
+		ch <- clientResult{client: cli, err: err}
+	}()
+
+	// 阻塞式
+	if opt.ConnectTimeout == 0 {
+		result := <-ch
+		return result.client, result.err
+	}
+
+	select {
+	case <-time.After(opt.ConnectTimeout):
+		return nil, fmt.Errorf("rpc client: connect timeout %s ", opt.ConnectTimeout)
+	case result := <-ch:
+		return result.client, result.err
+	}
+
+	return
 }

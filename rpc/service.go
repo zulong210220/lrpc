@@ -102,6 +102,7 @@ func (s *service) registerMethods() {
 	}
 }
 
+// 通过反射调用rpc函数代码
 func (s *service) call(m *methodType, argv, replyv reflect.Value) error {
 	atomic.AddUint64(&m.numCalls, 1)
 

@@ -8,6 +8,7 @@ package main
  * */
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"lrpc/client"
@@ -15,6 +16,7 @@ import (
 	"lrpc/log"
 	"lrpc/rpc"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +47,15 @@ func TestCode(t *testing.T) {
 	fun := "TestCode"
 
 	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
 	addr := make(chan string)
 	go testStartServer(addr)
 
@@ -60,7 +71,7 @@ func TestCode(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		h := &lcode.Header{
-			ServiceMethod: "Foo.sum",
+			ServiceMethod: "Foo.Sum",
 			Seq:           uint64(i),
 		}
 
@@ -98,7 +109,8 @@ func TestClient(t *testing.T) {
 	time.Sleep(time.Second)
 
 	var (
-		wg sync.WaitGroup
+		wg  sync.WaitGroup
+		ctx = context.Background()
 	)
 
 	for i := 0; i < 5; i++ {
@@ -108,7 +120,7 @@ func TestClient(t *testing.T) {
 			args := fmt.Sprintf("client lllrpc req %d", i)
 			var reply string
 
-			err := c.Call("Foo.Sum", args, &reply)
+			err := c.Call(ctx, "Foo.Sum", args, &reply)
 			if err != nil {
 				log.Errorf("%s call Foo.Sum failed err:%v", fun, err)
 				return
@@ -141,7 +153,8 @@ func TestReg(t *testing.T) {
 	}()
 
 	var (
-		wg sync.WaitGroup
+		wg  sync.WaitGroup
+		ctx = context.Background()
 	)
 
 	for i := 0; i < 5; i++ {
@@ -152,7 +165,7 @@ func TestReg(t *testing.T) {
 			var reply int
 			args := &rpc.Args{Num1: i, Num2: i * i}
 
-			err := c.Call("Foo.Sum", args, &reply)
+			err := c.Call(ctx, "Foo.Sum", args, &reply)
 			if err != nil {
 				log.Fatalf("call Foo.Sum failed i:%d err:%v", i, err)
 				return
@@ -161,6 +174,52 @@ func TestReg(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestTimeout(t *testing.T) {
+	t.Parallel()
+
+	addr := make(chan string)
+
+	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
+	go testStartServer(addr)
+
+	ad := <-addr
+
+	t.Run("client timeout", func(t *testing.T) {
+		c, _ := client.Dial("tcp", ad)
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		var reply int
+		err := c.Call(ctx, "Foo.Timeout", 1, &reply)
+		if !(err != nil && strings.Contains(err.Error(), ctx.Err().Error())) {
+			t.Fatal("expected timeout ", err)
+		}
+		log.Infof("client timeout reply:%d err:%v", reply, err)
+	})
+
+	t.Run("server timeout", func(t *testing.T) {
+		c, _ := client.Dial("tcp", ad, &rpc.Option{
+			HandleTimeout: time.Second,
+		})
+		var reply int
+		err := c.Call(context.Background(), "Foo.Timeout", 1, &reply)
+		if err == nil {
+			t.Fatal("expected timeout  err", err)
+		}
+		if !strings.Contains(err.Error(), "handle timeout") {
+			t.Fatal("expected timeout ", err)
+		}
+		log.Infof("server timeout reply:%d err:%v", reply, err)
+	})
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */
