@@ -48,12 +48,12 @@ func (gc *GobCodec) Write(h *Header, body interface{}) (err error) {
 	}()
 
 	if err = gc.enc.Encode(h); err != nil {
-		log.Errorf("rpc codec: gob error encoding header:", err)
+		log.Errorf("", "rpc codec: gob error encoding header:%v", err)
 		return
 	}
 
 	if err = gc.enc.Encode(body); err != nil {
-		log.Errorf("rpc codec: gob error encoding body:", err)
+		log.Errorf("", "rpc codec: gob error encoding body:%v", err)
 		return
 	}
 

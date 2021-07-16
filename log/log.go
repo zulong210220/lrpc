@@ -18,44 +18,44 @@ func Close() {
 	l.stop()
 }
 
-func Debug(args ...interface{}) {
-	l.p(DEBUG, args...)
+func Debug(traceId string, args ...interface{}) {
+	l.p(traceId, DEBUG, args...)
 }
 
-func Debugf(format string, args ...interface{}) {
-	l.pf(DEBUG, format, args...)
+func Debugf(traceId string, format string, args ...interface{}) {
+	l.pf(traceId, DEBUG, format, args...)
 }
 
-func Info(args ...interface{}) {
-	l.p(INFO, args...)
+func Info(traceId string, args ...interface{}) {
+	l.p(traceId, INFO, args...)
 }
 
-func Infof(format string, args ...interface{}) {
-	l.pf(INFO, format, args...)
+func Infof(traceId string, format string, args ...interface{}) {
+	l.pf(traceId, INFO, format, args...)
 }
 
-func Warning(args ...interface{}) {
-	l.p(WARNING, args...)
+func Warning(traceId string, args ...interface{}) {
+	l.p(traceId, WARNING, args...)
 }
 
-func Warningf(format string, args ...interface{}) {
-	l.pf(WARNING, format, args...)
+func Warningf(traceId string, format string, args ...interface{}) {
+	l.pf(traceId, WARNING, format, args...)
 }
 
-func Error(args ...interface{}) {
-	l.p(ERROR, args...)
+func Error(traceId string, args ...interface{}) {
+	l.p(traceId, ERROR, args...)
 }
 
-func Errorf(format string, args ...interface{}) {
-	l.pf(ERROR, format, args...)
+func Errorf(traceId string, format string, args ...interface{}) {
+	l.pf(traceId, ERROR, format, args...)
 }
 
-func Fatal(args ...interface{}) {
-	l.p(FATAL, args...)
+func Fatal(traceId string, args ...interface{}) {
+	l.p(traceId, FATAL, args...)
 }
 
-func Fatalf(format string, args ...interface{}) {
-	l.pf(FATAL, format, args...)
+func Fatalf(traceId string, format string, args ...interface{}) {
+	l.pf(traceId, FATAL, format, args...)
 }
 
 func ForceFlush() {

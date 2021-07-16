@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"lrpc/utils"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -75,11 +77,12 @@ type Logger struct {
 }
 
 type Atom struct {
-	line   int
-	file   string
-	format string
-	level  LEVEL
-	args   []interface{}
+	line    int
+	file    string
+	format  string
+	level   LEVEL
+	traceId string
+	args    []interface{}
 }
 
 func newLogger(config *Config) {
@@ -167,25 +170,42 @@ func (l *Logger) stop() {
 func (l *Logger) write(a *Atom) {
 	now := time.Now()
 	t := now.Nanosecond() / 1000
-	_, month, day := now.Date()
+	year, month, day := now.Date()
 	hour, minute, second := now.Clock()
-	n, _ := l.w.Write([]byte{
-		byte(month/10) + 48, byte(month%10) + 48, '-', byte(day/10) + 48, byte(day%10) + 48, ' ',
-		byte(hour/10) + 48, byte(hour%10) + 48, ':', byte(minute/10) + 48, byte(minute%10) + 48, ' ',
+	n, _ := l.w.Write([]byte(strconv.FormatInt(int64(year), 10)))
+	l.s += n
+	n, _ = l.w.Write([]byte{'-',
+		byte(month/10) + 48, byte(month%10) + 48, '-',
+		byte(day/10) + 48, byte(day%10) + 48, ' ',
+		byte(hour/10) + 48, byte(hour%10) + 48, ':',
+		byte(minute/10) + 48, byte(minute%10) + 48, ':',
 		byte(second/10) + 48, byte(second%10) + 48, '.',
-		byte((t%1000000)/100000) + 48, byte((t%100000)/10000) + 48, byte((t%10000)/1000) + 48,
-		byte((t%1000)/100) + 48, byte((t%100)/10) + 48, byte(t%10) + 48, ' ',
+		byte((t%1000000)/100000) + 48, byte((t%100000)/10000) + 48, byte((t%10000)/1000) + 48, ' ',
 	})
 	l.s += n
+
+	// traceId
+	l.w.Write([]byte{'['})
+	n, _ = l.w.WriteString(a.traceId)
+	l.w.Write([]byte{']', ' '})
+	l.s += n + 3
+
 	n, _ = l.w.WriteString(levelText[a.level])
 	l.s += n
 	l.w.WriteByte(' ')
 	l.s += 1
 	n, _ = l.w.WriteString(a.file)
 	l.s += n
-	l.w.Write([]byte{':', byte((a.line%10000)/1000) + 48, byte((a.line%1000)/100) + 48,
+	n, _ = l.w.Write([]byte{':', byte((a.line%10000)/1000) + 48, byte((a.line%1000)/100) + 48,
 		byte((a.line%100)/10) + 48, byte(a.line%10) + 48, ' '})
-	l.s += 6
+	l.s += n
+
+	// go id
+	l.w.Write([]byte{'['})
+	n, _ = l.w.WriteString(utils.GetGoidStr())
+	l.w.Write([]byte{']'})
+	l.s += n + 2
+
 	if len(a.format) == 0 {
 		l.w.WriteByte(' ')
 		l.s++
@@ -196,6 +216,7 @@ func (l *Logger) write(a *Atom) {
 		n, _ = fmt.Fprintf(l.w, a.format, a.args...)
 		l.s += n
 	}
+
 	l.w.WriteByte(10)
 	l.s++
 }
@@ -208,15 +229,15 @@ func (l *Logger) format(a *Atom) (int, []byte) {
 	}()
 	now := time.Now()
 	t := now.Nanosecond() / 1000
-	_, month, day := now.Date()
+	year, month, day := now.Date()
 	hour, minute, second := now.Clock()
-	w.Write([]byte{byte(month/10) + 48, byte(month%10) + 48, '-',
+	w.Write([]byte{byte(year/10) + 48, byte(year%10) + 48, '-',
+		byte(month/10) + 48, byte(month%10) + 48, '-',
 		byte(day/10) + 48, byte(day%10) + 48, ' ',
 		byte(hour/10) + 48, byte(hour%10) + 48, ':',
 		byte(minute/10) + 48, byte(minute%10) + 48, ':',
 		byte(second/10) + 48, byte(second%10) + 48, '.',
-		byte((t%1000000)/100000) + 48, byte((t%100000)/10000) + 48, byte((t%10000)/1000) + 48,
-		byte((t%1000)/100) + 48, byte((t%100)/10) + 48, byte(t%10) + 48, ' ',
+		byte((t%1000000)/100000) + 48, byte((t%100000)/10000) + 48, byte((t%10000)/1000) + 48, ' ',
 	})
 	w.WriteString(levelText[a.level])
 	w.WriteByte(' ')
@@ -282,7 +303,7 @@ func (l *Logger) genTime() string {
 	return fmt.Sprintf("%s", time.Now())[:26]
 }
 
-func (l *Logger) p(level LEVEL, args ...interface{}) {
+func (l *Logger) p(traceId string, level LEVEL, args ...interface{}) {
 	file, line := l.getFileNameAndLine()
 	if l == nil {
 		fmt.Printf("%s %s %s:%d ", l.genTime(), levelText[level], file, line)
@@ -297,16 +318,17 @@ func (l *Logger) p(level LEVEL, args ...interface{}) {
 		return
 	}
 	if level >= l.level {
-		l.ch <- &Atom{file: file, line: line, level: level, args: args}
+		l.ch <- &Atom{traceId: traceId, file: file, line: line, level: level, args: args}
 	}
 }
 
-func (l *Logger) pf(level LEVEL, format string, args ...interface{}) {
+func (l *Logger) pf(traceId string, level LEVEL, format string, args ...interface{}) {
 	file, line := l.getFileNameAndLine()
 	if l == nil {
 		fmt.Printf("%s %s %s:%d ", l.genTime(), levelText[level], file, line)
 		fmt.Printf(format, args...)
 		fmt.Println()
+		return
 	}
 	if l.debug {
 		l.mu.Lock()
@@ -317,7 +339,7 @@ func (l *Logger) pf(level LEVEL, format string, args ...interface{}) {
 		return
 	}
 	if level >= l.level {
-		l.ch <- &Atom{file: file, line: line, format: format, level: level, args: args}
+		l.ch <- &Atom{traceId: traceId, file: file, line: line, format: format, level: level, args: args}
 	}
 }
 

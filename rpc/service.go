@@ -9,10 +9,9 @@ package rpc
 
 import (
 	"go/ast"
+	"log"
 	"reflect"
 	"sync/atomic"
-
-	"github.com/sirupsen/logrus"
 )
 
 type methodType struct {
@@ -64,7 +63,7 @@ func newService(rcvr interface{}) *service {
 	s.typ = reflect.TypeOf(rcvr)
 
 	if !ast.IsExported(s.name) {
-		logrus.Fatalf("%s rpc server : %s is not a valid service name", fun, s.name)
+		log.Fatalf("", "%s rpc server : %s is not a valid service name", fun, s.name)
 	}
 
 	s.registerMethods()

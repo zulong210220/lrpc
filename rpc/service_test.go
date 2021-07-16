@@ -8,10 +8,9 @@ package rpc
  * */
 
 import (
+	"lrpc/log"
 	"reflect"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestNS(t *testing.T) {
@@ -26,7 +25,7 @@ func TestNS(t *testing.T) {
 	if mType == nil {
 		t.Fatal("wrong method, Sum should't nil")
 	}
-	logrus.Info(mType)
+	log.Info("", mType)
 }
 
 func TestFoo(t *testing.T) {
