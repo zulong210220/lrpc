@@ -10,6 +10,8 @@ package client
 import (
 	"lrpc/rpc"
 	"net"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +47,27 @@ func TestTimeout(t *testing.T) {
 			t.Fatal("unexpected timeout should no limit", err)
 		}
 	})
+}
+
+func TestXDial(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		ch := make(chan struct{})
+		addr := "/tmp/lrpc.sock"
+		go func() {
+			_ = os.Remove(addr)
+			l, err := net.Listen("unix", addr)
+			if err != nil {
+				t.Fatal("failed to listen unix sock")
+			}
+			ch <- struct{}{}
+			rpc.Accept(l)
+		}()
+		<-ch
+		_, err := XDial("unix@" + addr)
+		if err != nil {
+			t.Fatal("failed to connect unix socket")
+		}
+	}
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

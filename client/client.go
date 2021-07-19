@@ -1,15 +1,19 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"lrpc/consts"
 	"lrpc/lcode"
 	"lrpc/log"
 	"lrpc/rpc"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -245,9 +249,9 @@ func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 }
 
 func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) error {
-	log.Infof("Client.Call ctx enter %v", time.Now())
+	log.Infof("", "Client.Call ctx enter %v", time.Now())
 	ca := c.Do(sm, args, reply, make(chan *Call, 1))
-	log.Infof("Client.Call ctx after Do %v", time.Now())
+	log.Infof("", "Client.Call ctx after Do %v", time.Now())
 	select {
 	case <-ctx.Done():
 		c.removeCall(ca.Seq)
@@ -306,4 +310,43 @@ func dialTimeout(f newClientFunc, network, addr string, opts ...*rpc.Option) (c 
 	}
 
 	return
+}
+
+// ----
+func NewHTTPClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
+	_, _ = io.WriteString(conn, fmt.Sprintf("CONNECT %s HTTP/1.0\n\n", consts.DefaultRpcPath))
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{
+		Method: "CONNECT",
+	})
+
+	if err == nil && resp.Status == consts.Connected {
+		return NewClient(conn, opt)
+	}
+
+	if err == nil {
+		err = errors.New("unexpected HTTP Response: " + resp.Status)
+	}
+	return nil, err
+}
+
+func DialHTTP(network, addr string, opts ...*rpc.Option) (*Client, error) {
+	return dialTimeout(NewHTTPClient, network, addr, opts...)
+}
+
+func XDial(rpcAddr string, opts ...*rpc.Option) (*Client, error) {
+	parts := strings.Split(rpcAddr, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("rpc client error: invalid format '%s', expect protocol@addr", rpcAddr)
+	}
+
+	protocol, addr := parts[0], parts[1]
+
+	switch protocol {
+	case consts.ProtocolHTTP:
+		return DialHTTP("tcp", addr, opts...)
+	case consts.ProtocolRPC:
+		return Dial(protocol, addr, opts...)
+	}
+
+	return nil, errors.New("invalid protocol")
 }
