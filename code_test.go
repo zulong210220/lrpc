@@ -246,6 +246,7 @@ func testHttpServer(addr chan string) {
 	http.Serve(ln, nil)
 }
 
+// TODO http connect 405
 func httpCall(addr chan string) {
 	ad := <-addr
 	cli, _ := client.DialHTTP("tcp", ad)
