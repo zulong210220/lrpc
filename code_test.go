@@ -16,6 +16,7 @@ import (
 	"lrpc/log"
 	"lrpc/rpc"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -167,10 +168,10 @@ func TestReg(t *testing.T) {
 
 			err := c.Call(ctx, "Foo.Sum", args, &reply)
 			if err != nil {
-				log.Fatalf("call Foo.Sum failed i:%d err:%v", i, err)
+				log.Fatalf("", "call Foo.Sum failed i:%d err:%v", i, err)
 				return
 			}
-			log.Infof("call success %d + %d = %d", args.Num1, args.Num2, reply)
+			log.Infof("", "call success %d + %d = %d", args.Num1, args.Num2, reply)
 		}(i)
 	}
 	wg.Wait()
@@ -203,7 +204,7 @@ func TestTimeout(t *testing.T) {
 		if !(err != nil && strings.Contains(err.Error(), ctx.Err().Error())) {
 			t.Fatal("expected timeout ", err)
 		}
-		log.Infof("client timeout reply:%d err:%v", reply, err)
+		log.Infof("", "client timeout reply:%d err:%v", reply, err)
 	})
 
 	t.Run("server timeout", func(t *testing.T) {
@@ -218,8 +219,70 @@ func TestTimeout(t *testing.T) {
 		if !strings.Contains(err.Error(), "handle timeout") {
 			t.Fatal("expected timeout ", err)
 		}
-		log.Infof("server timeout reply:%d err:%v", reply, err)
+		log.Infof("", "server timeout reply:%d err:%v", reply, err)
 	})
+}
+
+func testHttpServer(addr chan string) {
+	fun := "startServer"
+	var f rpc.Foo
+
+	err := rpc.Register(&f)
+	if err != nil {
+		log.Fatalf("%s register failed err:%v", fun, err)
+		return
+	}
+
+	ln, err := net.Listen("tcp", ":19999")
+	if err != nil {
+		log.Fatalf("%s network error: %v", fun, err)
+		return
+	}
+
+	log.Infof("%s start rpc server on %v", fun, ln.Addr())
+	rpc.HandleHTTP()
+	addr <- ln.Addr().String()
+	fmt.Println(ln.Addr().String())
+	http.Serve(ln, nil)
+}
+
+func httpCall(addr chan string) {
+	ad := <-addr
+	cli, _ := client.DialHTTP("tcp", ad)
+	defer func() {
+		_ = cli.Close()
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := &rpc.Args{Num1: i, Num2: i * i}
+			var reply int
+			if err := cli.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
+				log.Fatal("", "call Foo.Sum error:", err)
+			}
+			log.Infof("", "%d + %d = %d", args.Num1, args.Num2, reply)
+		}(i)
+	}
+}
+
+func TestHttp(t *testing.T) {
+	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
+
+	ch := make(chan string)
+	go httpCall(ch)
+	testHttpServer(ch)
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

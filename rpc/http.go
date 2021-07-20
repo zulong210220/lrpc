@@ -32,6 +32,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) HandleHTTP() {
 	http.Handle(consts.DefaultRpcPath, s)
+	http.Handle(consts.DefaultDebugPath, debugHTTP{s})
+	log.Info("", "Server.HandleHTTP serveing....")
 }
 
 func HandleHTTP() {

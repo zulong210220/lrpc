@@ -58,6 +58,9 @@ const (
 func (c *Client) Close() error {
 	//c.mu.Lock()
 	//defer c.mu.Unlock()
+	if c == nil {
+		return nil
+	}
 
 	if atomic.LoadInt32(&c.closing) == StatusClosing {
 		return ErrShutdown
@@ -319,6 +322,7 @@ func NewHTTPClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 		Method: "CONNECT",
 	})
 
+	log.Info("", "NewHTTPClient", err, resp.Status)
 	if err == nil && resp.Status == consts.Connected {
 		return NewClient(conn, opt)
 	}
