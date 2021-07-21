@@ -13,7 +13,7 @@ const (
 )
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == consts.MethodConnect {
+	if r.Method != consts.MethodConnect {
 		w.Header().Set(headerContentType, ContentType)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		_, _ = io.WriteString(w, "405 must CONNECT")

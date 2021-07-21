@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"lrpc/consts"
 	"lrpc/lcode"
 	"lrpc/log"
 	"net"
@@ -70,7 +71,7 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	}()
 	var opt Option
 	err := json.NewDecoder(conn).Decode(&opt)
-	log.Infof("%s opt:%+v", fun, opt)
+	log.Infof("", "%s opt:%+v", fun, opt)
 	if err != nil {
 		log.Errorf("%s rpc server options error:%v", fun, err)
 		return
@@ -131,7 +132,7 @@ func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 	err := cc.ReadHeader(&h)
 	if err != nil {
 		if err != io.EOF && err != io.ErrUnexpectedEOF {
-			log.Errorf("%s rpc server read header error:%v", fun, err)
+			log.Errorf("", "%s rpc server read header error:%v", fun, err)
 		}
 		return nil, err
 	}
@@ -148,7 +149,7 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	req := &request{h: h}
 	req.svc, req.mType, err = s.findService(h.ServiceMethod)
 	if err != nil {
-		log.Errorf("%s findService failed serviceMethod:%s err:%v", fun, h.ServiceMethod, err)
+		log.Errorf("", "%s findService failed serviceMethod:%s err:%v", fun, h.ServiceMethod, err)
 		return req, err
 	}
 
@@ -221,7 +222,8 @@ func (s *Server) Register(rcvr interface{}) error {
 
 	_, dup := s.serviceMap.LoadOrStore(sv.name, sv)
 	if dup {
-		return errors.New("rpc service already registered: " + sv.name)
+		log.Error("", "rpc service already registered: ", sv.name)
+		return consts.ErrRegDup
 	}
 	return nil
 }

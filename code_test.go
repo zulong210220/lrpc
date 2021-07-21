@@ -12,9 +12,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"lrpc/client"
+	"lrpc/consts"
 	"lrpc/lcode"
 	"lrpc/log"
 	"lrpc/rpc"
+	"lrpc/xclient"
 	"net"
 	"net/http"
 	"strings"
@@ -29,17 +31,19 @@ func testStartServer(addr chan string) {
 
 	err := rpc.Register(&f)
 	if err != nil {
-		log.Fatalf("%s register failed err:%v", fun, err)
-		return
+		log.Fatalf("", "%s register failed err:%v", fun, err)
+		if err != consts.ErrRegDup {
+			return
+		}
 	}
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		log.Fatalf("%s network error: %v", fun, err)
+		log.Fatalf("", "%s network error: %v", fun, err)
 		return
 	}
 
-	log.Infof("%s start rpc server on %v", fun, ln.Addr())
+	log.Infof("", "%s start rpc server on %v", fun, ln.Addr())
 	addr <- ln.Addr().String()
 	rpc.Accept(ln)
 }
@@ -242,13 +246,13 @@ func testHttpServer(addr chan string) {
 	log.Infof("%s start rpc server on %v", fun, ln.Addr())
 	rpc.HandleHTTP()
 	addr <- ln.Addr().String()
-	fmt.Println(ln.Addr().String())
 	http.Serve(ln, nil)
 }
 
 // TODO http connect 405
 func httpCall(addr chan string) {
 	ad := <-addr
+	//time.Sleep(10 * time.Second)
 	cli, _ := client.DialHTTP("tcp", ad)
 	defer func() {
 		_ = cli.Close()
@@ -267,6 +271,7 @@ func httpCall(addr chan string) {
 			log.Infof("", "%d + %d = %d", args.Num1, args.Num2, reply)
 		}(i)
 	}
+	wg.Wait()
 }
 
 func TestHttp(t *testing.T) {
@@ -284,6 +289,82 @@ func TestHttp(t *testing.T) {
 	ch := make(chan string)
 	go httpCall(ch)
 	testHttpServer(ch)
+}
+
+func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, args *rpc.Args) {
+	var reply int
+	var err error
+	switch typ {
+	case "call":
+		err = xc.Call(ctx, serviceMethod, args, &reply)
+	case "broadcast":
+		err = xc.Broadcast(ctx, serviceMethod, args, &reply)
+	}
+	if err != nil {
+		log.Errorf("", "%s %s error: %v", typ, serviceMethod, err)
+	} else {
+		log.Infof("", "%s %s success: %d + %d = %d", typ, serviceMethod, args.Num1, args.Num2, reply)
+	}
+}
+
+func call(addr1, addr2 string) {
+	d := xclient.NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
+	defer func() { _ = xc.Close() }()
+	// send request & receive response
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			foo(xc, context.Background(), "call", "Foo.Sum", &rpc.Args{Num1: i, Num2: i * i})
+		}(i)
+	}
+	wg.Wait()
+}
+
+func broadcast(addr1, addr2 string) {
+	d := xclient.NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
+	defer func() { _ = xc.Close() }()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			foo(xc, context.Background(), "broadcast", "Foo.Sum", &rpc.Args{Num1: i, Num2: i * i})
+			// expect 2 - 5 timeout
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			foo(xc, ctx, "broadcast", "Foo.Sleep", &rpc.Args{Num1: i, Num2: i * i})
+		}(i)
+	}
+	wg.Wait()
+}
+
+func TestBroadcast(t *testing.T) {
+	lcode.Init()
+	log.Init(&log.Config{
+		Dir:      "./logs",
+		FileSize: 256,
+		FileNum:  256,
+		Env:      "test",
+		Level:    "INFO",
+		FileName: "lrpc",
+	})
+	defer log.ForceFlush()
+
+	ch1 := make(chan string)
+	ch2 := make(chan string)
+	// start two servers
+	go testStartServer(ch1)
+	go testStartServer(ch2)
+
+	addr1 := <-ch1
+	addr2 := <-ch2
+
+	call(addr1, addr2)
+	broadcast(addr1, addr2)
+	time.Sleep(time.Second)
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

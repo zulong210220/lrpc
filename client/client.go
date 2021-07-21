@@ -124,7 +124,7 @@ func (c *Client) receive() {
 		err = c.cc.ReadHeader(&h)
 		// TODO conn关闭会报错
 		if err != nil {
-			log.Errorf("%s ReadHeader failed err:%v", fun, err)
+			log.Errorf("", "%s ReadHeader failed err:%v", fun, err)
 			break
 		}
 
@@ -154,7 +154,7 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 
 	if f == nil {
 		err := fmt.Errorf("%s invalid codec type %s", fun, opt.CodecType)
-		log.Errorf("%s rpc client codec err:%v", fun, err)
+		log.Errorf("", "%s rpc client codec err:%v", fun, err)
 		return nil, err
 	}
 
@@ -234,11 +234,11 @@ func (c *Client) send(ca *Call) {
 
 func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 	fun := "Client.Do"
-	log.Infof("%s Do enter done:%d", fun, cap(done))
+	log.Infof("", "%s Do enter done:%d", fun, cap(done))
 	if done == nil {
 		done = make(chan *Call, 16)
 	} else if cap(done) == 0 {
-		log.Errorf("%s rpc client done channel is unbuffered", fun)
+		log.Errorf("", "%s rpc client done channel is unbuffered", fun)
 	}
 	ca := &Call{
 		ServiceMethod: sm,
@@ -258,10 +258,10 @@ func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) e
 	select {
 	case <-ctx.Done():
 		c.removeCall(ca.Seq)
-		log.Info("case ctx.Done ", time.Now())
+		log.Info("", "case ctx.Done ", time.Now())
 		return fmt.Errorf("rpc client : call failed err:%s", ctx.Err().Error())
 	case cd := <-ca.Done:
-		log.Info("case call.Done ", time.Now())
+		log.Info("", "case call.Done ", time.Now())
 		return cd.Error
 	}
 }
@@ -317,12 +317,12 @@ func dialTimeout(f newClientFunc, network, addr string, opts ...*rpc.Option) (c 
 
 // ----
 func NewHTTPClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
-	_, _ = io.WriteString(conn, fmt.Sprintf("CONNECT %s HTTP/1.0\n\n", consts.DefaultRpcPath))
+	_, _ = io.WriteString(conn, fmt.Sprintf("%s %s HTTP/1.0\n\n", consts.MethodConnect, consts.DefaultRpcPath))
 	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{
 		Method: "CONNECT",
 	})
 
-	log.Info("", "NewHTTPClient", err, resp.Status)
+	//log.Info("", "NewHTTPClient", err, resp.Status)
 	if err == nil && resp.Status == consts.Connected {
 		return NewClient(conn, opt)
 	}
@@ -348,7 +348,7 @@ func XDial(rpcAddr string, opts ...*rpc.Option) (*Client, error) {
 	switch protocol {
 	case consts.ProtocolHTTP:
 		return DialHTTP("tcp", addr, opts...)
-	case consts.ProtocolRPC:
+	default:
 		return Dial(protocol, addr, opts...)
 	}
 
