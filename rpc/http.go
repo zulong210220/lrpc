@@ -2,8 +2,8 @@ package rpc
 
 import (
 	"io"
-	"lrpc/consts"
-	"lrpc/log"
+	"github.com/zulong210220/lrpc/consts"
+	"github.com/zulong210220/lrpc/log"
 	"net/http"
 )
 

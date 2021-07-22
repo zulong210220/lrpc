@@ -8,7 +8,7 @@ package client
  * */
 
 import (
-	"lrpc/rpc"
+	"github.com/zulong210220/lrpc/rpc"
 	"net"
 	"os"
 	"runtime"

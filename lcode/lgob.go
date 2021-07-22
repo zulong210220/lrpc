@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/gob"
 	"io"
-	"lrpc/log"
+	"github.com/zulong210220/lrpc/log"
 )
 
 type GobCodec struct {

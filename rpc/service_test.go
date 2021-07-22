@@ -8,7 +8,7 @@ package rpc
  * */
 
 import (
-	"lrpc/log"
+	"github.com/zulong210220/lrpc/log"
 	"reflect"
 	"testing"
 )

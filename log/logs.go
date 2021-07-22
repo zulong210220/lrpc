@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"lrpc/utils"
+	"github.com/zulong210220/lrpc/utils"
 	"os"
 	"os/exec"
 	"path"

@@ -10,8 +10,8 @@ package xclient
 import (
 	"context"
 	"io"
-	"lrpc/client"
-	"lrpc/rpc"
+	"github.com/zulong210220/lrpc/client"
+	"github.com/zulong210220/lrpc/rpc"
 	"reflect"
 	"sync"
 )

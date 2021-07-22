@@ -1,5 +1,3 @@
-module lrpc
+module github.com/zulong210220/lrpc
 
 go 1.14
-
-require github.com/sirupsen/logrus v1.8.1

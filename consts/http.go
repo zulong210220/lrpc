@@ -8,10 +8,10 @@ package consts
  * */
 
 const (
-	DefaultRpcPath   = "/_lrpc_"
-	DefaultDebugPath = "/debug/_lrpc_"
+	DefaultRpcPath   = "/_github.com/zulong210220/lrpc_"
+	DefaultDebugPath = "/debug/_github.com/zulong210220/lrpc_"
 	MethodConnect    = "CONNECT"
-	Connected        = "200 Connected to lrpc"
+	Connected        = "200 Connected to github.com/zulong210220/lrpc"
 )
 
 const (
