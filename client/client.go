@@ -160,7 +160,7 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 
 	err := json.NewEncoder(conn).Encode(opt)
 	if err != nil {
-		log.Errorf("%s rpc client options failed err:%v", fun, err)
+		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
 		_ = conn.Close()
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (c *Client) send(ca *Call) {
 
 	seq, err := c.registerCall(ca)
 	if err != nil {
-		log.Errorf("%s client registerCall failed err:%v", fun, err)
+		log.Errorf("", "%s client registerCall failed err:%v", fun, err)
 		ca.Error = err
 		ca.done()
 		return

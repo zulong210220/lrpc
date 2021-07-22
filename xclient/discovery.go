@@ -8,8 +8,12 @@ package xclient
  * */
 import (
 	"errors"
+	"lrpc/consts"
+	"lrpc/log"
 	"math"
 	"math/rand"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -87,6 +91,84 @@ func (d *MultiServersDiscovery) GetAll() ([]string, error) {
 	ss := make([]string, len(d.servers), len(d.servers))
 	copy(ss, d.servers)
 	return ss, nil
+}
+
+type RegistryDiscovery struct {
+	*MultiServersDiscovery
+	registry   string
+	timeout    time.Duration
+	lastUpdate time.Time
+}
+
+func NewRegistryDiscovery(ra string, to time.Duration) *RegistryDiscovery {
+	if to == 0 {
+		to = consts.DefaultUpdateTimeout
+	}
+
+	d := &RegistryDiscovery{
+		MultiServersDiscovery: NewMultiServerDiscovery(make([]string, 0)),
+		registry:              ra,
+		timeout:               to,
+	}
+	return d
+}
+
+func (rd *RegistryDiscovery) Update(ss []string) error {
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+
+	rd.servers = ss
+	rd.lastUpdate = time.Now()
+
+	return nil
+}
+
+func (rd *RegistryDiscovery) Refresh() error {
+	fun := "RegistryDiscovery.Refresh"
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+
+	if rd.lastUpdate.Add(rd.timeout).After(time.Now()) {
+		return nil
+	}
+
+	log.Infof("", "%s rpc registry: refresh servers from registry: %s", fun, rd.registry)
+	resp, err := http.Get(rd.registry)
+	if err != nil {
+		log.Errorf("", "%s rpc registry refresh err:%v", fun, err)
+		return err
+	}
+
+	ss := strings.Split(resp.Header.Get("X-lrpc-servers"), ",")
+	rd.servers = make([]string, 0, len(ss))
+
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			rd.servers = append(rd.servers, s)
+		}
+	}
+
+	rd.lastUpdate = time.Now()
+	return nil
+}
+
+func (rd *RegistryDiscovery) Get(sm SelectMode) (string, error) {
+	err := rd.Refresh()
+	if err != nil {
+		return "", err
+	}
+
+	return rd.MultiServersDiscovery.Get(sm)
+}
+
+func (rd *RegistryDiscovery) GetAll() ([]string, error) {
+	err := rd.Refresh()
+	if err != nil {
+		return nil, err
+	}
+
+	return rd.MultiServersDiscovery.GetAll()
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

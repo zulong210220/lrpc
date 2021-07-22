@@ -52,7 +52,7 @@ func (s *Server) Accept(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Errorf("%s rpc server accept failed err:%v", fun, err)
+			log.Errorf("", "%s rpc server accept failed err:%v", fun, err)
 			return
 		}
 
@@ -73,18 +73,18 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	err := json.NewDecoder(conn).Decode(&opt)
 	log.Infof("", "%s opt:%+v", fun, opt)
 	if err != nil {
-		log.Errorf("%s rpc server options error:%v", fun, err)
+		log.Errorf("", "%s rpc server options error:%v", fun, err)
 		return
 	}
 
 	if opt.MagicNumber != MagicNumber {
-		log.Errorf("%s rpc server invalid magic number %x", fun, opt.MagicNumber)
+		log.Errorf("", "%s rpc server invalid magic number %x", fun, opt.MagicNumber)
 		return
 	}
 
 	f := lcode.NewCodecFuncMap[opt.CodecType]
 	if f == nil {
-		log.Errorf("%s rpc server invalid codec type %s", fun, opt.CodecType)
+		log.Errorf("", "%s rpc server invalid codec type %s", fun, opt.CodecType)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 
 	err = cc.ReadBody(argvi)
 	if err != nil {
-		log.Errorf("%s rpc server read argv failed err:%v", fun, err)
+		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
 	}
 	return req, err
 }
@@ -175,7 +175,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 	defer sending.Unlock()
 	err := cc.Write(h, body)
 	if err != nil {
-		log.Errorf("%s rpc server write response failed error:%v", fun, err)
+		log.Errorf("", "%s rpc server write response failed error:%v", fun, err)
 	}
 
 }
@@ -183,7 +183,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
 	fun := "Server.handleRequest"
 	defer wg.Done()
-	log.Info(fun, " : ", req.h, " : ", req.argv)
+	log.Info("", fun, " : ", req.h, " : ", req.argv)
 
 	called := make(chan struct{})
 	send := make(chan struct{})
