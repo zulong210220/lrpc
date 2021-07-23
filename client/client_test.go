@@ -8,13 +8,14 @@ package client
  * */
 
 import (
-	"github.com/zulong210220/lrpc/rpc"
 	"net"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zulong210220/lrpc/rpc"
 )
 
 func TestTimeout(t *testing.T) {

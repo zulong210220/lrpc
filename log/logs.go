@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/zulong210220/lrpc/utils"
 	"os"
 	"os/exec"
 	"path"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zulong210220/lrpc/utils"
 )
 
 const (

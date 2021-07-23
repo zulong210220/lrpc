@@ -8,14 +8,15 @@ package registry
  * */
 
 import (
-	"github.com/zulong210220/lrpc/consts"
-	"github.com/zulong210220/lrpc/log"
 	"net"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zulong210220/lrpc/consts"
+	"github.com/zulong210220/lrpc/log"
 )
 
 type ServerItem struct {

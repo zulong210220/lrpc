@@ -10,7 +10,7 @@ package consts
 import "time"
 
 const (
-	DefaultRegPath       = "/github.com/zulong210220/lrpc/registry"
+	DefaultRegPath       = "/lrpc/registry"
 	DefaultRegTimeout    = time.Minute
 	DefaultUpdateTimeout = 10 * time.Second
 )

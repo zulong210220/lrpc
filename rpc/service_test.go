@@ -8,9 +8,10 @@ package rpc
  * */
 
 import (
-	"github.com/zulong210220/lrpc/log"
 	"reflect"
 	"testing"
+
+	"github.com/zulong210220/lrpc/log"
 )
 
 func TestNS(t *testing.T) {

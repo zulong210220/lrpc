@@ -8,14 +8,15 @@ package xclient
  * */
 import (
 	"errors"
-	"github.com/zulong210220/lrpc/consts"
-	"github.com/zulong210220/lrpc/log"
 	"math"
 	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zulong210220/lrpc/consts"
+	"github.com/zulong210220/lrpc/log"
 )
 
 type SelectMode int

@@ -10,10 +10,11 @@ package xclient
 import (
 	"context"
 	"io"
-	"github.com/zulong210220/lrpc/client"
-	"github.com/zulong210220/lrpc/rpc"
 	"reflect"
 	"sync"
+
+	"github.com/zulong210220/lrpc/client"
+	"github.com/zulong210220/lrpc/rpc"
 )
 
 type XClient struct {

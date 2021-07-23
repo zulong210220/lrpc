@@ -2,9 +2,10 @@ package rpc
 
 import (
 	"io"
+	"net/http"
+
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/log"
-	"net/http"
 )
 
 const (

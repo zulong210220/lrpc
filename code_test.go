@@ -11,6 +11,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/zulong210220/lrpc/client"
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/lcode"
@@ -18,12 +25,6 @@ import (
 	"github.com/zulong210220/lrpc/registry"
 	"github.com/zulong210220/lrpc/rpc"
 	"github.com/zulong210220/lrpc/xclient"
-	"net"
-	"net/http"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func testStartServer(addr chan string) {
