@@ -1,16 +1,23 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/zulong210220/lrpc/utils"
+
+	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"github.com/sirupsen/logrus"
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
@@ -37,13 +44,75 @@ var DefaultOption = &Option{
 // | <------      固定 JSON 编码      ------>  | <-------   编码方式由 CodeType 决定   ------->|
 // | Option | Header1 | Body1 | Header2 | Body2 | ...
 
+type Config struct {
+	EtcdAddr    []string
+	EtcdTimeout int
+	ServerName  string
+}
+
 type Server struct {
 	serviceMap sync.Map
+	client     *clientv3.Client
+	ln         net.Listener
+	name       string
+	endpoint   string
 }
 
 func NewServer() *Server {
 	s := &Server{}
 	return s
+}
+
+func (s *Server) Init(c *Config) {
+	fun := "Server.Init"
+	var err error
+	config := clientv3.Config{
+		Endpoints:   c.EtcdAddr,
+		DialTimeout: time.Duration(c.EtcdTimeout) * time.Second,
+	}
+	s.name = c.ServerName
+
+	s.client, err = clientv3.New(config)
+	if err != nil {
+		logrus.Errorf("%s err:%v", fun, err)
+		return
+	}
+	s.ln, _ = net.Listen("tcp", ":0")
+
+	lip, _ := utils.ExternalIP()
+	s.endpoint = lip.String() + ":" + s.getListenPort()
+}
+
+func (s *Server) getListenPort() string {
+	la := s.ln.Addr().String()
+	ss := strings.Split(la, ":")
+	if len(ss) == 0 {
+		return ""
+	}
+	return ss[len(ss)-1]
+}
+
+func (s *Server) getEtcdKey() string {
+	return fmt.Sprintf("%s/%s/%s", consts.DefaultRegPath, s.name, s.endpoint)
+}
+
+func (s *Server) getEtcdValue() string {
+	return strconv.Itoa(int(time.Now().Unix()))
+}
+
+func (s *Server) RegistryEtcd() {
+	ctx := context.Background()
+	key := s.getEtcdKey()
+	value := s.getEtcdValue()
+	s.client.Put(ctx, key, value, clientv3.WithPrevKV())
+}
+
+// https://github.com/golang/go/issues/27707
+func (s *Server) registry() {
+	for {
+		s.RegistryEtcd()
+		time.Sleep(time.Second)
+	}
 }
 
 var DefaultServer = NewServer()
@@ -59,6 +128,10 @@ func (s *Server) Accept(ln net.Listener) {
 
 		go s.ServeConn(conn)
 	}
+}
+
+func (s *Server) Run() {
+	s.Accept(s.ln)
 }
 
 func Accept(ln net.Listener) {
