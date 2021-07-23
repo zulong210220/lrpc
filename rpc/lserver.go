@@ -131,6 +131,7 @@ func (s *Server) Accept(ln net.Listener) {
 }
 
 func (s *Server) Run() {
+	go s.registry()
 	s.Accept(s.ln)
 }
 
