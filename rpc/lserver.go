@@ -17,7 +17,6 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
-	"github.com/sirupsen/logrus"
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
@@ -51,11 +50,15 @@ type Config struct {
 }
 
 type Server struct {
-	serviceMap sync.Map
-	client     *clientv3.Client
-	ln         net.Listener
-	name       string
-	endpoint   string
+	serviceMap    sync.Map
+	client        *clientv3.Client
+	leaseID       clientv3.LeaseID //租约ID
+	keepAliveChan <-chan *clientv3.LeaseKeepAliveResponse
+	ln            net.Listener
+	name          string
+	endpoint      string
+	stop          chan error
+	watchServers  []string
 }
 
 func NewServer() *Server {
@@ -74,13 +77,14 @@ func (s *Server) Init(c *Config) {
 
 	s.client, err = clientv3.New(config)
 	if err != nil {
-		logrus.Errorf("%s err:%v", fun, err)
+		log.Errorf("%s err:%v", fun, err)
 		return
 	}
 	s.ln, _ = net.Listen("tcp", ":0")
 
 	lip, _ := utils.ExternalIP()
 	s.endpoint = lip.String() + ":" + s.getListenPort()
+	s.stop = make(chan error)
 }
 
 func (s *Server) getListenPort() string {
@@ -100,17 +104,72 @@ func (s *Server) getEtcdValue() string {
 	return strconv.Itoa(int(time.Now().Unix()))
 }
 
-func (s *Server) RegistryEtcd() {
+func (s *Server) registryEtcd() error {
+	fun := "Server.registryEtcd"
 	ctx := context.Background()
 	key := s.getEtcdKey()
 	value := s.getEtcdValue()
-	s.client.Put(ctx, key, value, clientv3.WithPrevKV())
+
+	//创建一个新的租约，并设置ttl时间
+	resp, err := s.client.Grant(context.Background(), consts.DefaultRegLease)
+	if err != nil {
+		log.Errorf("", "%s client.Grant failed err:%v", fun, err)
+		return err
+	}
+	log.Infof("", "%s client.Grant resp ID:%v TTL:%d Err:%s", fun, resp.ID, resp.TTL, resp.Error)
+
+	ps, err := s.client.Put(ctx, key, value, clientv3.WithLease(resp.ID))
+	if err != nil {
+		log.Errorf("", "%s client.Put failed err:%v", fun, err)
+		return err
+	}
+	log.Infof("", "%s client.Put PrevKV:%v", fun, ps.PrevKv)
+
+	//设置续租 定期发送需求请求
+	//KeepAlive使给定的租约永远有效。 如果发布到channel的keepalive响应没有立即被使用，
+	// 则租约客户端将至少每秒钟继续向etcd服务器发送保持活动请求，直到获取最新的响应为止。
+	//etcd client会自动发送ttl到etcd server，从而保证该租约一直有效
+	leaseRespChan, err := s.client.KeepAlive(context.Background(), resp.ID)
+	if err != nil {
+		log.Errorf("", "%s client.KeepAlive failed err:%v", fun, err)
+		return err
+	}
+
+	s.leaseID = resp.ID
+	s.keepAliveChan = leaseRespChan
+
+	return err
+}
+
+//ListenLeaseRespChan 监听 续租情况
+func (s *Server) ListenLeaseRespChan() {
+	for leaseKeepResp := range s.keepAliveChan {
+		log.Info("", "续约成功", leaseKeepResp)
+		//fmt.Println("", "续约成功", leaseKeepResp)
+	}
+	log.Info("", "关闭续租")
+}
+
+// revoke 注销服务
+func (s *Server) revoke() error {
+	fun := "Server.revoke"
+	//撤销租约
+	if _, err := s.client.Revoke(context.Background(), s.leaseID); err != nil {
+		log.Errorf("", "%s client.Revoke failed err:%v", fun, err)
+		return err
+	}
+	log.Info("", "撤销租约")
+	return s.client.Close()
+}
+
+func (s *Server) Stop() {
+	s.stop <- nil
 }
 
 // https://github.com/golang/go/issues/27707
 func (s *Server) registry() {
 	for {
-		s.RegistryEtcd()
+		s.registryEtcd()
 		time.Sleep(time.Second)
 	}
 }
@@ -130,8 +189,30 @@ func (s *Server) Accept(ln net.Listener) {
 	}
 }
 
+func (s *Server) selectLoop() {
+	for {
+		select {
+		case err := <-s.stop:
+			log.Error("", "Server.selectLoop stop failed err:", err)
+			s.revoke()
+			return
+		case <-s.client.Ctx().Done():
+			log.Error("", "server closed")
+		case ka, ok := <-s.keepAliveChan:
+			if !ok {
+				log.Info("", "keep alive channel closed")
+				s.revoke()
+				return
+			} else {
+				log.Infof("", "Recv reply from service: %s, ttl:%d", s.name, ka.TTL)
+			}
+		}
+	}
+}
+
 func (s *Server) Run() {
-	go s.registry()
+	go s.registryEtcd()
+	go s.selectLoop()
 	s.Accept(s.ln)
 }
 
@@ -314,6 +395,7 @@ func (s *Server) findService(sm string) (svc *service, mType *methodType, err er
 		return
 	}
 
+	// serviceName.methodName
 	sn, mn := sm[:dot], sm[dot+1:]
 
 	sv, ok := s.serviceMap.Load(sn)

@@ -13,6 +13,7 @@ const (
 	DefaultRegPath       = "/lrpc/registry"
 	DefaultRegTimeout    = time.Minute
 	DefaultUpdateTimeout = 10 * time.Second
+	DefaultRegLease      = 5
 )
 
 /* vim: set tabstop=4 set shiftwidth=4 */
