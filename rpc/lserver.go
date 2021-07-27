@@ -138,16 +138,8 @@ func (s *Server) registryEtcd() error {
 	s.leaseID = resp.ID
 	s.keepAliveChan = leaseRespChan
 
+	s.selectLoop()
 	return err
-}
-
-//ListenLeaseRespChan 监听 续租情况
-func (s *Server) ListenLeaseRespChan() {
-	for leaseKeepResp := range s.keepAliveChan {
-		log.Info("", "续约成功", leaseKeepResp)
-		//fmt.Println("", "续约成功", leaseKeepResp)
-	}
-	log.Info("", "关闭续租")
 }
 
 // revoke 注销服务
@@ -167,12 +159,6 @@ func (s *Server) Stop() {
 }
 
 // https://github.com/golang/go/issues/27707
-func (s *Server) registry() {
-	for {
-		s.registryEtcd()
-		time.Sleep(time.Second)
-	}
-}
 
 var DefaultServer = NewServer()
 
@@ -198,13 +184,14 @@ func (s *Server) selectLoop() {
 			return
 		case <-s.client.Ctx().Done():
 			log.Error("", "server closed")
+			// select keep alive chan 要在etcd初始化之后才有效
 		case ka, ok := <-s.keepAliveChan:
 			if !ok {
-				log.Info("", "keep alive channel closed")
+				log.Info("", "keep alive channel closed", ka)
 				s.revoke()
 				return
 			} else {
-				log.Infof("", "Recv reply from service: %s, ttl:%d", s.name, ka.TTL)
+				//log.Infof("", "Recv reply from service: %s, ttl:%d", s.name, ka.TTL)
 			}
 		}
 	}
@@ -212,7 +199,6 @@ func (s *Server) selectLoop() {
 
 func (s *Server) Run() {
 	go s.registryEtcd()
-	go s.selectLoop()
 	s.Accept(s.ln)
 }
 

@@ -9,9 +9,12 @@ package xclient
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
+
+	"github.com/zulong210220/lrpc/log"
 
 	"github.com/zulong210220/lrpc/client"
 	"github.com/zulong210220/lrpc/rpc"
@@ -54,6 +57,7 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 	defer xc.mu.Unlock()
 
 	cli, ok := xc.clients[rpcAddr]
+	fmt.Println(xc.clients)
 
 	if cli == nil {
 		var err error
@@ -82,17 +86,20 @@ func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, re
 	return cli.Call(ctx, sm, args, reply)
 }
 
-func (xc *XClient) Call(ctx context.Context, sm string, args, reply interface{}) error {
-	rpcAddr, err := xc.d.Get(xc.mode)
+func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply interface{}) error {
+	rpcAddr, err := xc.d.Get(sn, xc.mode)
 	if err != nil {
+		log.Errorf("", "XClient.Call Get service:%s mode:%d method:%s failed err:%v", sn, xc.mode, sm, err)
 		return err
 	}
+
+	rpcAddr = "tcp@" + rpcAddr
 
 	return xc.call(rpcAddr, ctx, sm, args, reply)
 }
 
-func (xc *XClient) Broadcast(ctx context.Context, sm string, args, reply interface{}) error {
-	ss, err := xc.d.GetAll()
+func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply interface{}) error {
+	ss, err := xc.d.GetAll(sn)
 	if err != nil {
 		return err
 	}

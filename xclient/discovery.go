@@ -27,10 +27,8 @@ const (
 )
 
 type Discovery interface {
-	Refresh() error
-	Update(ss []string) error
-	Get(mode SelectMode) (string, error)
-	GetAll() ([]string, error)
+	Get(sn string, mode SelectMode) (string, error)
+	GetAll(sn string) ([]string, error)
 }
 
 type MultiServersDiscovery struct {
@@ -57,14 +55,14 @@ func (d *MultiServersDiscovery) Refresh() error {
 	return nil
 }
 
-func (d *MultiServersDiscovery) Update(ss []string) error {
+func (d *MultiServersDiscovery) Update(sn string, ss []string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.servers = ss
 	return nil
 }
 
-func (d *MultiServersDiscovery) Get(mode SelectMode) (string, error) {
+func (d *MultiServersDiscovery) Get(sn string, mode SelectMode) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -85,7 +83,7 @@ func (d *MultiServersDiscovery) Get(mode SelectMode) (string, error) {
 	}
 }
 
-func (d *MultiServersDiscovery) GetAll() ([]string, error) {
+func (d *MultiServersDiscovery) GetAll(sn string) ([]string, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -159,8 +157,8 @@ func (rd *RegistryDiscovery) Get(sm SelectMode) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	return rd.MultiServersDiscovery.Get(sm)
+	sn := ""
+	return rd.MultiServersDiscovery.Get(sn, sm)
 }
 
 func (rd *RegistryDiscovery) GetAll() ([]string, error) {
@@ -169,7 +167,8 @@ func (rd *RegistryDiscovery) GetAll() ([]string, error) {
 		return nil, err
 	}
 
-	return rd.MultiServersDiscovery.GetAll()
+	sn := ""
+	return rd.MultiServersDiscovery.GetAll(sn)
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

@@ -284,7 +284,7 @@ func dialTimeout(f newClientFunc, network, addr string, opts ...*rpc.Option) (c 
 
 	conn, err := net.DialTimeout(network, addr, opt.ConnectTimeout)
 	if err != nil {
-		log.Errorf("%s DialTimeout failed network:%s addr:%s err:%v", fun, network, addr, err)
+		log.Errorf("", "%s DialTimeout failed network:%s addr:%s err:%v", fun, network, addr, err)
 		return nil, err
 	}
 
