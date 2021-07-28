@@ -206,6 +206,12 @@ func Dial(network, addr string, opts ...*rpc.Option) (c *Client, err error) {
 }
 
 func (c *Client) send(ca *Call) {
+	if c == nil {
+		if ca != nil {
+			ca.done()
+		}
+		return
+	}
 	fun := "Client.send"
 	// 并发发送需要加锁
 	c.sending.Lock()
@@ -235,7 +241,7 @@ func (c *Client) send(ca *Call) {
 
 func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 	fun := "Client.Do"
-	log.Infof("", "%s Do enter done:%d", fun, cap(done))
+	//log.Infof("", "%s Do enter done:%d", fun, cap(done))
 	if done == nil {
 		done = make(chan *Call, 16)
 	} else if cap(done) == 0 {
@@ -253,16 +259,16 @@ func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 }
 
 func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) error {
-	log.Infof("", "Client.Call ctx enter %v", time.Now())
+	//log.Infof("", "Client.Call ctx enter %v", time.Now())
 	ca := c.Do(sm, args, reply, make(chan *Call, 1))
-	log.Infof("", "Client.Call ctx after Do %v", time.Now())
+	//log.Infof("", "Client.Call ctx after Do %v", time.Now())
 	select {
 	case <-ctx.Done():
 		c.removeCall(ca.Seq)
 		log.Info("", "case ctx.Done ", time.Now())
 		return fmt.Errorf("rpc client : call failed err:%s", ctx.Err().Error())
 	case cd := <-ca.Done:
-		log.Info("", "case call.Done ", time.Now())
+		//log.Info("", "case call.Done ", time.Now())
 		return cd.Error
 	}
 }

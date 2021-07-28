@@ -267,6 +267,15 @@ type request struct {
 	svc          *service
 }
 
+func (r *request) Header() *lcode.Header {
+	h := &lcode.Header{
+		ServiceMethod: r.h.ServiceMethod,
+		Seq:           r.h.Seq,
+		Error:         r.h.Error,
+	}
+	return h
+}
+
 func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 	fun := "Server.readRequestHeader"
 	var h lcode.Header
@@ -325,7 +334,7 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
 	fun := "Server.handleRequest"
 	defer wg.Done()
-	log.Info("", fun, " : ", req.h, " : ", req.argv)
+	log.Info("hR", fun, " : ", req.Header(), " : ", req.argv)
 
 	called := make(chan struct{})
 	send := make(chan struct{})

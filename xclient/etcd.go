@@ -89,6 +89,7 @@ func (ed *EtcdDiscovery) watcher(path string) {
 
 	for wresp := range rch {
 		for _, ev := range wresp.Events {
+			log.Infof("etcd watch", "wresp events %+v", ev)
 			switch ev.Type {
 			case mvccpb.PUT: //修改或者新增
 				ed.SetServices(path, getEndpointFromKey(string(ev.Kv.Key)))
@@ -97,6 +98,7 @@ func (ed *EtcdDiscovery) watcher(path string) {
 			}
 		}
 	}
+	log.Infof("", "watching prefix:%s ending...", path)
 }
 
 // service name
@@ -105,7 +107,7 @@ func getSNFromPath(path string) string {
 	if len(ss) < 2 {
 		return ""
 	}
-	return ss[len(ss)-2]
+	return ss[len(ss)-1]
 }
 
 func getEndpointFromKey(key string) string {
@@ -117,12 +119,13 @@ func getEndpointFromKey(key string) string {
 }
 
 func (ed *EtcdDiscovery) SetServices(path, endpoint string) {
-	log.Infof("Set services path:%s endpoint:%s", path, endpoint)
+	log.Infof("etcd", "Set services path:%s endpoint:%s", path, endpoint)
 	// TODO
 	s := getSNFromPath(path)
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
 
+	log.Infof("etcd", "services:%+v, before %s", ed.services[s], s)
 	if ed.services[s] == nil {
 		ed.services[s] = []string{endpoint}
 		return
@@ -135,14 +138,16 @@ func (ed *EtcdDiscovery) SetServices(path, endpoint string) {
 		}
 	}
 
+	log.Infof("etcd before", "services:%+v, s:%s exist:%v", ed.services[s], s, exist)
 	if !exist {
 		ed.services[s] = append(ed.services[s], endpoint)
 	}
+	log.Infof("etcd after", "services:%+v, s:%s exist:%v", ed.services[s], s, exist)
 	return
 }
 
 func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
-	log.Infof("Del services path:%s endpoint:%s", path, endpoint)
+	log.Infof("etcd", "Del services path:%s endpoint:%s", path, endpoint)
 	// TODO
 	s := getSNFromPath(path)
 	ed.mu.Lock()
@@ -152,6 +157,7 @@ func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
 		return
 	}
 
+	log.Infof("etcd before", "Del services path:%s endpoint:%s servers:%+v", path, endpoint, ed.services[s])
 	es := []string{}
 	for _, e := range ed.services[s] {
 		if e == endpoint {
@@ -162,6 +168,7 @@ func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
 
 	ed.services[s] = es
 
+	log.Infof("etcd after", "Del services path:%s endpoint:%s servers:%+v", path, endpoint, ed.services[s])
 	return
 }
 

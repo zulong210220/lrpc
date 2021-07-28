@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ const (
 type LEVEL byte
 
 const (
-	ALL LEVEL = iota
+	ALL LEVEL = iota + 1
 	DEBUG
 	INFO
 	WARNING
@@ -128,6 +129,15 @@ func newLogger(config *Config) {
 }
 
 func (l *Logger) start() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			l.w.Write(debug.Stack())
+			l.w.WriteString(fmt.Sprint(err))
+		}
+		l.w.Flush()
+		os.Exit(1)
+	}()
 	for {
 		a := <-l.ch
 		if a == nil {
@@ -210,6 +220,7 @@ func (l *Logger) write(a *Atom) {
 	if len(a.format) == 0 {
 		l.w.WriteByte(' ')
 		l.s++
+		// 此处fmt buffer nil panic 数据竞争导致
 		n, _ = fmt.Fprint(l.w, a.args...)
 		l.s += n
 	} else {

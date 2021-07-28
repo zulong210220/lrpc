@@ -9,7 +9,6 @@ package xclient
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -57,7 +56,6 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 	defer xc.mu.Unlock()
 
 	cli, ok := xc.clients[rpcAddr]
-	fmt.Println(xc.clients)
 
 	if cli == nil {
 		var err error
@@ -81,6 +79,7 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, reply interface{}) error {
 	cli, err := xc.dial(rpcAddr)
 	if err != nil {
+		log.Errorf("xc call", "XClient.call rpcAddr:%s failed err:%v", rpcAddr, err)
 		return err
 	}
 	return cli.Call(ctx, sm, args, reply)
