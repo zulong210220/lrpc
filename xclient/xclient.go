@@ -85,6 +85,7 @@ func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, re
 	return cli.Call(ctx, sm, args, reply)
 }
 
+// TODO server close retry
 func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply interface{}) error {
 	rpcAddr, err := xc.d.Get(sn, xc.mode)
 	if err != nil {
