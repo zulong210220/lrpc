@@ -24,11 +24,13 @@ type SelectMode int
 const (
 	RandomSelect SelectMode = iota + 1
 	RoundRobinSelect
+	P2cSelect
 )
 
 type Discovery interface {
 	Get(sn string, mode SelectMode) (string, error)
 	GetAll(sn string) ([]string, error)
+	Observe(rpaAddr string, dur int64)
 }
 
 type MultiServersDiscovery struct {
@@ -50,6 +52,10 @@ func NewMultiServerDiscovery(ss []string) *MultiServersDiscovery {
 var (
 	_ Discovery = (*MultiServersDiscovery)(nil)
 )
+
+func (md *MultiServersDiscovery) Observe(rpcAddr string, dur int64) {
+
+}
 
 func (d *MultiServersDiscovery) Refresh() error {
 	return nil

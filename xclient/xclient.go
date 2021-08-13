@@ -9,9 +9,11 @@ package xclient
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/zulong210220/lrpc/log"
 
@@ -77,17 +79,33 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 }
 
 func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, reply interface{}) error {
+	fmt.Println("bef xc.dial")
 	cli, err := xc.dial(rpcAddr)
+	fmt.Println("after xc.dial")
 	if err != nil {
 		log.Errorf("xc call", "XClient.call rpcAddr:%s failed err:%v", rpcAddr, err)
 		return err
 	}
-	return cli.Call(ctx, sm, args, reply)
+
+	begin := time.Now().UnixNano()
+	fmt.Println("bef cli.Call")
+	err = cli.Call(ctx, sm, args, reply)
+	fmt.Println("after cli.Call")
+	end := time.Now().UnixNano()
+
+	xc.Observe(rpcAddr, end-begin)
+	return err
+}
+
+func (xc *XClient) Observe(rpcAddr string, dur int64) {
+	xc.d.Observe(rpcAddr, dur)
 }
 
 // TODO server close retry
 func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply interface{}) error {
+	fmt.Println("bef XC Call")
 	rpcAddr, err := xc.d.Get(sn, xc.mode)
+	fmt.Println("after XC Call ", rpcAddr)
 	if err != nil {
 		log.Errorf("", "XClient.Call Get service:%s mode:%d method:%s failed err:%v", sn, xc.mode, sm, err)
 		return err

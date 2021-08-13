@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,22 +30,26 @@ func main() {
 	sn := "demo1"
 
 	d := xclient.NewEtcdDiscovery([]string{"127.0.0.1:2379"}, 1, []string{sn})
-	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)
+	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() { _ = xc.Close() }()
 
 	//TODO 二次连接panic
 	time.Sleep(1000 * time.Millisecond)
-	for i := 1; i < 99999; i++ {
+	for i := 1; i < 9; i++ {
 		var reply int
 		var err error
-		ctx := context.Background()
+		//ctx := context.Background()
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		fmt.Println("bef call")
 		err = xc.Call(ctx, sn, "Foo.Sum", &rpc.Args{Num1: i, Num2: i * i}, &reply)
+		fmt.Println("after call")
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}
 		log.Infof("", "Call [%d] reply:%d", i, reply)
 	}
 	log.Infof("", "Call over...")
+	fmt.Println("all over......")
 
 	// sleep wait log flush
 	//time.Sleep(1000 * time.Millisecond)

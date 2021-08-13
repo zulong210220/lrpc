@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ type Call struct {
 }
 
 func (c *Call) done() {
+	fmt.Println(runtime.Caller(1))
 	c.Done <- c
 }
 
@@ -130,6 +132,11 @@ func (c *Client) receive() {
 		}
 
 		ca := c.removeCall(h.Seq)
+		if ca != nil {
+			fmt.Printf("c.receive ctx after Do ca:%+v done:%d h:%+v %v\n", ca, len(ca.Done), h, time.Now())
+		} else {
+			fmt.Printf("c.receive ctx after Do ca:%+v h:%+v %v\n", ca, h, time.Now())
+		}
 		switch {
 		case ca == nil:
 			err = c.cc.ReadBody(nil)
@@ -229,7 +236,9 @@ func (c *Client) send(ca *Call) {
 	c.header.Seq = seq
 	c.header.Error = ""
 
+	fmt.Println("before cc.Write ", ca.Args)
 	err = c.cc.Write(&c.header, ca.Args)
+	fmt.Println("after cc.Write ", ca.Args, err)
 	if err != nil {
 		ca := c.removeCall(seq)
 		if ca != nil {
@@ -260,15 +269,21 @@ func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 
 func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) error {
 	//log.Infof("", "Client.Call ctx enter %v", time.Now())
+	fmt.Printf("Client.Call ctx enter %v\n", time.Now())
+	// send to server
 	ca := c.Do(sm, args, reply, make(chan *Call, 1))
 	//log.Infof("", "Client.Call ctx after Do %v", time.Now())
+	fmt.Printf("Client.Call ctx after Do ca:%+v done:%d %v\n", ca, len(ca.Done), time.Now())
+
+	// wait receive done
+	// 可能存在server不响应的情况
 	select {
 	case <-ctx.Done():
 		c.removeCall(ca.Seq)
 		log.Info("", "case ctx.Done ", time.Now())
 		return fmt.Errorf("rpc client : call failed err:%s", ctx.Err().Error())
 	case cd := <-ca.Done:
-		//log.Info("", "case call.Done ", time.Now())
+		log.Info("", "case call.Done ", ca.Args, time.Now())
 		return cd.Error
 	}
 }

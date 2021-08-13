@@ -84,6 +84,7 @@ func (s *Server) Init(c *Config) {
 
 	lip, _ := utils.ExternalIP()
 	s.endpoint = lip.String() + ":" + s.getListenPort()
+	fmt.Println(s.endpoint)
 	s.stop = make(chan error)
 }
 
@@ -166,6 +167,7 @@ func (s *Server) Accept(ln net.Listener) {
 	fun := "Server.Accept"
 	for {
 		conn, err := ln.Accept()
+		fmt.Println("Accept ", conn.LocalAddr(), conn.RemoteAddr(), err)
 		if err != nil {
 			log.Errorf("", "%s rpc server accept failed err:%v", fun, err)
 			return
@@ -213,7 +215,7 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	}()
 	var opt Option
 	err := json.NewDecoder(conn).Decode(&opt)
-	log.Infof("", "%s opt:%+v", fun, opt)
+	log.Infof("", "%s endpoint:%s opt:%+v", fun, s.endpoint, opt)
 	if err != nil {
 		log.Errorf("", "%s rpc server options error:%v", fun, err)
 		return
@@ -238,11 +240,15 @@ var (
 )
 
 func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
+	fun := "Server.serveCodec"
 	sending := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 
 	for {
+		log.Infof("before readRequest", "%s endpoint:%s ", fun, s.endpoint)
+		// wait 偶尔阻塞在此
 		req, err := s.readRequest(cc)
+		log.Infof("", "%s endpoint:%s req:%+v err:%v", fun, s.endpoint, req, err)
 		if err != nil {
 			if req == nil {
 				break
@@ -280,7 +286,11 @@ func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 	fun := "Server.readRequestHeader"
 	var h lcode.Header
 
+	log.Info("before rRH", fun, " : ", s.endpoint)
+	// TODO 阻塞在此
 	err := cc.ReadHeader(&h)
+	log.Info("rRH", fun, " : ", h, " : ", s.endpoint, err)
+
 	if err != nil {
 		if err != io.EOF && err != io.ErrUnexpectedEOF {
 			log.Errorf("", "%s rpc server read header error:%v", fun, err)
@@ -334,7 +344,8 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
 	fun := "Server.handleRequest"
 	defer wg.Done()
-	log.Info("hR", fun, " : ", req.Header(), " : ", req.argv)
+	log.Info("hR", fun, " : ", req.Header(), " : ", req.argv, " : ", s.endpoint)
+	fmt.Println("hR... ", req.Header(), req.argv)
 
 	called := make(chan struct{})
 	send := make(chan struct{})
@@ -343,17 +354,21 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 		// 此处真正执行代码逻辑
 		err := req.svc.call(req.mType, req.argv, req.replyv)
 		called <- struct{}{}
+		fmt.Println("go func called")
 		if err != nil {
 			req.h.Error = err.Error()
 			s.sendResponse(cc, req.h, invalidRequest, sending)
 			send <- struct{}{}
+			fmt.Println("go func error send")
 			return
 		}
 
 		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 		send <- struct{}{}
+		fmt.Println("go func send")
 	}()
 
+	fmt.Println("timeout ", timeout)
 	if timeout == 0 {
 		<-called
 		<-send
@@ -361,9 +376,11 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 
 	select {
 	case <-time.After(timeout):
+		fmt.Println("tm After")
 		req.h.Error = fmt.Sprintf("rpc server: request handle timeout %s", timeout)
 		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 	case <-called:
+		fmt.Println("called")
 		<-send
 	}
 }

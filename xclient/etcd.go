@@ -21,6 +21,8 @@ type EtcdDiscovery struct {
 	services map[string][]string
 	r        *rand.Rand
 	index    int
+	p2cs     map[string][]*peakEwmaNode
+	edp2c    map[string]*peakEwma // ip:port=>latency
 }
 
 func NewEtcdDiscovery(ea []string, et int, ss []string) *EtcdDiscovery {
@@ -173,6 +175,10 @@ func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
 }
 
 func (ed *EtcdDiscovery) Get(sn string, sm SelectMode) (string, error) {
+	if sm == P2cSelect {
+		return ed.p2cNext(sn)
+	}
+
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
 
@@ -182,11 +188,13 @@ func (ed *EtcdDiscovery) Get(sn string, sm SelectMode) (string, error) {
 		res, err := ed.GetService(sn)
 		if err != nil {
 			log.Errorf("", "Etcd Discovery GetService %s failed err:%v", sn, err)
+			return "", err
 		}
-		if len(res) > 0 {
-			services = res
+		if len(res) == 0 {
+			return "", errors.New("rpc discovery: no avaialable servers")
 		}
-		return "", errors.New("rpc discovery: no avaialable servers")
+		ed.services[sn] = res
+		services = res
 	}
 
 	switch sm {
@@ -220,7 +228,7 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 	log.Infof("", "%s before get ...sn:%s", fun, sn)
 	key := ed.GetRegPath(sn)
 	resp, err := ed.client.Get(ctx, key, clientv3.WithPrevKV())
-	log.Infof("", "%s get %s...resp:%+v", fun, key, resp)
+	log.Infof("", "%s get %s...resp:%+v err:%v", fun, key, resp, err)
 	if err != nil {
 		log.Errorf("%s client get key:%s err:%v", fun, key, err)
 		return res, err
@@ -235,4 +243,70 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 	}
 
 	return res, err
+}
+
+func (ed *EtcdDiscovery) p2cNext(sn string) (string, error) {
+	ss := ed.p2cs[sn]
+	n := len(ss)
+
+	ed.mu.Lock()
+	defer ed.mu.Unlock()
+	fmt.Println("---- ", n)
+	if n == 0 {
+		res, err := ed.GetService(sn)
+		if err != nil {
+			log.Errorf("", "Etcd Discovery GetService %s failed err:%v", sn, err)
+			return "", err
+		}
+		fmt.Println(sn, res)
+		if len(res) == 0 {
+			return "", errors.New("rpc discovery: no avaialable servers")
+		}
+		sss := []*peakEwmaNode{}
+
+		for _, s := range res {
+			sss = append(ss, &peakEwmaNode{item: s, latency: newPEWMA(), weight: 1})
+		}
+		ed.p2cs[sn] = sss
+		ss = sss
+	}
+
+	n = len(ss)
+	if n == 1 {
+		return ss[0].item, nil
+	}
+
+	a := ed.r.Intn(len(ss))
+	b := ed.r.Intn(len(ss) - 1)
+
+	if b >= a {
+		b++
+	}
+
+	sc, backsc := ss[a], ss[b]
+
+	// choose the least loaded item based on inflight and weight
+	if float64(sc.latency.Value())*backsc.weight > float64(backsc.latency.Value())*sc.weight {
+		sc, backsc = backsc, sc
+	}
+	if ed.edp2c[sc.item] == nil {
+		ed.edp2c[sc.item] = sc.latency
+	}
+
+	return sc.item, nil
+}
+
+func (ed *EtcdDiscovery) Observe(rpcAddr string, dur int64) {
+	if rpcAddr == "" {
+		return
+	}
+	ss := strings.Split(rpcAddr, "@")
+	n := len(ss)
+	endpoint := ""
+	if n == 1 {
+		endpoint = ss[0]
+	}
+	endpoint = ss[1]
+
+	ed.edp2c[endpoint].Observe(dur)
 }
