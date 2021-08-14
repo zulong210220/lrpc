@@ -2,7 +2,9 @@ package lcode
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/gob"
+	"errors"
 	"io"
 
 	"github.com/zulong210220/lrpc/log"
@@ -32,12 +34,47 @@ func NewGobCodec(conn io.ReadWriteCloser) Codec {
 
 // ---
 
+const (
+	BUF_SIZE = 1024 * 1024
+)
+
 func (gc *GobCodec) ReadHeader(h *Header) error {
-	return gc.dec.Decode(h)
+	data := make([]byte, 256)
+	n, err := gc.conn.Read(data)
+	if err != nil {
+		log.Error("", "GobCodec.ReadBody Read connection data failed:", err)
+		if err == io.EOF {
+		}
+		return err
+	}
+	if n == 0 {
+		return errors.New("gob read header zero")
+	}
+
+	b := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(b)
+	return dec.Decode(&h)
 }
 
 func (gc *GobCodec) ReadBody(body interface{}) error {
-	return gc.dec.Decode(body)
+	data := make([]byte, BUF_SIZE)
+	log.Infof("before gob.ReadBody", "read body ")
+	n, err := gc.conn.Read(data)
+	if err != nil {
+		log.Error("", "GobCodec.ReadBody Read connection data failed:", err)
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	}
+	if n == 0 {
+		return errors.New("gob read header zero")
+	}
+
+	log.Infof("gob.ReadBody", "read body %s", data)
+	b := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(b)
+	return dec.Decode(body)
 }
 
 func (gc *GobCodec) Write(h *Header, body interface{}) (err error) {
@@ -48,15 +85,25 @@ func (gc *GobCodec) Write(h *Header, body interface{}) (err error) {
 		}
 	}()
 
-	if err = gc.enc.Encode(h); err != nil {
-		log.Errorf("", "rpc codec: gob error encoding header:%v", err)
+	var b bytes.Buffer
+	enc := gob.NewEncoder(&b)
+
+	if err = enc.Encode(h); err != nil {
+		log.Errorf("gob.Encode.Write", "rpc codec: gob error encoding header:%v", err)
 		return
 	}
 
-	if err = gc.enc.Encode(body); err != nil {
-		log.Errorf("", "rpc codec: gob error encoding body:%v", err)
+	if err = enc.Encode(body); err != nil {
+		log.Errorf("gob.Encode.Write", "rpc codec: gob error encoding body:%v", err)
 		return
 	}
+	var n int
+	n, err = gc.conn.Write(b.Bytes())
+	if err != nil {
+		log.Errorf("gob.Write", "rpc codec: gob error write buffer:%v", err)
+		return
+	}
+	log.Infof("gob.Write", "conn write n:%d", n)
 
 	return
 }

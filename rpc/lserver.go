@@ -322,7 +322,9 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 		argvi = req.argv.Addr().Interface()
 	}
 
+	log.Info("before rR", fun, " : ", s.endpoint, " : ", req.argv)
 	err = cc.ReadBody(argvi)
+	log.Info("after rR", fun, " : ", s.endpoint, " : ", req.argv, " : ", argvi)
 	if err != nil {
 		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
 	}
