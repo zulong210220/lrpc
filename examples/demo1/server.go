@@ -25,8 +25,8 @@ func main() {
 
 	s := rpc.NewServer()
 	s.Init(&rpc.Config{
-		//EtcdAddr:    []string{"127.0.0.1:2379"},
-		EtcdAddr:    []string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
+		EtcdAddr: []string{"127.0.0.1:2379"},
+		//EtcdAddr:    []string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
 		EtcdTimeout: 5,
 		ServerName:  "demo1",
 	})

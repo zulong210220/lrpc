@@ -35,7 +35,7 @@ type Option struct {
 
 var DefaultOption = &Option{
 	MagicNumber:    MagicNumber,
-	CodecType:      lcode.GobType,
+	CodecType:      lcode.JsonType,
 	ConnectTimeout: 3 * time.Second,
 }
 
@@ -251,6 +251,7 @@ func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
 		log.Infof("", "%s endpoint:%s req:%+v err:%v", fun, s.endpoint, req, err)
 		if err != nil {
 			if req == nil {
+				wg = nil
 				break
 			}
 
@@ -262,7 +263,11 @@ func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
 		wg.Add(1)
 		go s.handleRequest(cc, req, sending, wg, opt.HandleTimeout)
 	}
-	wg.Wait()
+	log.Infof("before wait", "%s endpoint:%s after", fun, s.endpoint)
+	if wg != nil {
+		wg.Wait()
+	}
+	log.Infof("after wait", "%s endpoint:%s br", fun, s.endpoint)
 	_ = cc.Close()
 }
 
@@ -374,6 +379,7 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 	if timeout == 0 {
 		<-called
 		<-send
+		return
 	}
 
 	select {

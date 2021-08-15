@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/zulong210220/lrpc/log"
@@ -51,9 +52,14 @@ func (gc *GobCodec) ReadHeader(h *Header) error {
 		return errors.New("gob read header zero")
 	}
 
+	fmt.Println(string(data))
 	b := bytes.NewBuffer(data)
 	dec := gob.NewDecoder(b)
 	return dec.Decode(&h)
+}
+
+func (gc *GobCodec) Read(msg *Message) error {
+	return nil
 }
 
 func (gc *GobCodec) ReadBody(body interface{}) error {

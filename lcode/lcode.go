@@ -8,10 +8,16 @@ type Header struct {
 	Error         string
 }
 
+type Message struct {
+	h *Header
+	b interface{}
+}
+
 type Codec interface {
 	io.Closer
 	ReadHeader(*Header) error
 	ReadBody(interface{}) error
+	Read(*Message) error
 	Write(*Header, interface{}) error
 }
 
@@ -33,6 +39,7 @@ var (
 func Init() {
 	NewCodecFuncMap = make(map[Type]NewCodecFunc)
 	NewCodecFuncMap[GobType] = NewGobCodec
+	NewCodecFuncMap[JsonType] = NewJsonCodec
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

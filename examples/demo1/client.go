@@ -30,8 +30,8 @@ func main() {
 	sn := "demo1"
 
 	d := xclient.NewEtcdDiscovery(
-		//[]string{"127.0.0.1:2379"},
-		[]string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
+		[]string{"127.0.0.1:2379"},
+		//[]string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
 		1, []string{sn})
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() { _ = xc.Close() }()
