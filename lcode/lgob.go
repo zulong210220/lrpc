@@ -62,6 +62,12 @@ func (gc *GobCodec) Read(msg *Message) error {
 	return nil
 }
 
+func (gc *GobCodec) Decode(data []byte, body interface{}) error {
+	b := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(b)
+	return dec.Decode(body)
+}
+
 func (gc *GobCodec) ReadBody(body interface{}) error {
 	data := make([]byte, BUF_SIZE)
 	log.Infof("before gob.ReadBody", "read body ")

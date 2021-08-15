@@ -7,10 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zulong210220/lrpc/log"
 	"io"
 	"io/ioutil"
-
-	"github.com/zulong210220/lrpc/log"
 )
 
 type JsonCodec struct {
@@ -70,6 +69,8 @@ func (gc *JsonCodec) ReadHeader1(h *Header) error {
 
 func (jc *JsonCodec) Read(msg *Message) error {
 	//data := make([]byte, BUF_SIZE)
+	fmt.Println("before js Read")
+	// TODO fix
 	data, err := ioutil.ReadAll(jc.conn)
 	if err != nil {
 		log.Error("", "JsonCodec.Read connection data failed:", err)
@@ -81,13 +82,25 @@ func (jc *JsonCodec) Read(msg *Message) error {
 
 	dataBuf := bytes.NewReader(data)
 
-	err = binary.Read(dataBuf, binary.LittleEndian, msg.h)
+	err = binary.Read(dataBuf, binary.LittleEndian, msg.H.ServiceMethod)
 	if err != nil {
 		log.Error("", "JsonCodec.Read binary connection data failed:", err)
 		return err
 	}
 
-	err = binary.Read(dataBuf, binary.LittleEndian, msg.b)
+	err = binary.Read(dataBuf, binary.LittleEndian, msg.H.Seq)
+	if err != nil {
+		log.Error("", "JsonCodec.Read binary connection data failed:", err)
+		return err
+	}
+
+	err = binary.Read(dataBuf, binary.LittleEndian, msg.H.Error)
+	if err != nil {
+		log.Error("", "JsonCodec.Read binary connection data failed:", err)
+		return err
+	}
+
+	err = binary.Read(dataBuf, binary.LittleEndian, msg.B)
 	if err != nil {
 		log.Error("", "JsonCodec.Read binary connection body data failed:", err)
 		return err
@@ -123,6 +136,10 @@ func (gc *JsonCodec) ReadBody1(body interface{}) error {
 	return dec.Decode(body)
 }
 
+func (jc *JsonCodec) Decode(data []byte, body interface{}) error {
+	return json.Unmarshal(data, body)
+}
+
 func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 	defer func() {
 		_ = gc.buf.Flush()
@@ -134,26 +151,46 @@ func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 	dataBuf := bytes.NewBuffer([]byte{})
 	var n int
 
-	err = binary.Write(dataBuf, binary.LittleEndian, h)
+	fmt.Println(h, *h)
+	err = binary.Write(dataBuf, binary.LittleEndian, []byte(h.ServiceMethod))
 	if err != nil {
-		log.Errorf("JsonCodec.Write", "rpc codec: gob error encoding header:%v", err)
+		log.Errorf("JsonCodec.Write", "rpc codec: json error encoding header:%v", err)
 		return
 	}
 
-	err = binary.Write(dataBuf, binary.LittleEndian, body)
+	err = binary.Write(dataBuf, binary.LittleEndian, h.Seq)
+	if err != nil {
+		log.Errorf("JsonCodec.Write", "rpc codec: json error encoding header:%v", err)
+		return
+	}
+
+	err = binary.Write(dataBuf, binary.LittleEndian, []byte(h.Error))
+	if err != nil {
+		log.Errorf("JsonCodec.Write", "rpc codec: json error encoding header:%v", err)
+		return
+	}
+
+	var bs []byte
+	bs, err = json.Marshal(body)
+	if err != nil {
+		log.Errorf("JsonCodec.Encode.Marshal", "rpc codec: gob error encoding body:%v", err)
+		return
+	}
+
+	err = binary.Write(dataBuf, binary.LittleEndian, bs)
 	if err != nil {
 		log.Errorf("JsonCodec.Encode.Write", "rpc codec: gob error encoding body:%v", err)
 		return
 	}
 
-	n, err = gc.conn.Write(dataBuf.Bytes())
+	d := dataBuf.Bytes()
+	n, err = gc.conn.Write(d)
 	if err != nil {
 		log.Errorf("gob.Write", "rpc codec: gob error write buffer:%v", err)
 		return
 	}
-	log.Infof("gob.Write", "conn write n:%d", n)
+	log.Infof("gob.Write", "conn write n:%d '%s'", n, d)
 
-	return
 	return
 }
 

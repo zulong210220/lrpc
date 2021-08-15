@@ -9,8 +9,8 @@ type Header struct {
 }
 
 type Message struct {
-	h *Header
-	b interface{}
+	H *Header
+	B []byte
 }
 
 type Codec interface {
@@ -19,6 +19,7 @@ type Codec interface {
 	ReadBody(interface{}) error
 	Read(*Message) error
 	Write(*Header, interface{}) error
+	Decode([]byte, interface{}) error
 }
 
 // ---

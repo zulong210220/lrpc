@@ -307,15 +307,21 @@ func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 
 func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	fun := "Server.readRequest"
-	h, err := s.readRequestHeader(cc)
+	//	h, err := s.readRequestHeader(cc)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+
+	msg := &lcode.Message{H: &lcode.Header{}}
+	err := cc.Read(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	req := &request{h: h}
-	req.svc, req.mType, err = s.findService(h.ServiceMethod)
+	req := &request{h: msg.H}
+	req.svc, req.mType, err = s.findService(msg.H.ServiceMethod)
 	if err != nil {
-		log.Errorf("", "%s findService failed serviceMethod:%s err:%v", fun, h.ServiceMethod, err)
+		log.Errorf("", "%s findService failed serviceMethod:%s err:%v", fun, msg.H.ServiceMethod, err)
 		return req, err
 	}
 
@@ -327,9 +333,10 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 		argvi = req.argv.Addr().Interface()
 	}
 
-	log.Info("before rR", fun, " : ", s.endpoint, " : ", req.argv)
-	err = cc.ReadBody(argvi)
-	log.Info("after rR", fun, " : ", s.endpoint, " : ", req.argv, " : ", argvi)
+	log.Info("before Decode", fun, " : ", s.endpoint, " : ", req.argv)
+	//err = cc.ReadBody(argvi)
+	err = cc.Decode(msg.B, argvi)
+	log.Info("after Decode", fun, " : ", s.endpoint, " : ", req.argv, " : ", argvi)
 	if err != nil {
 		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
 	}

@@ -86,9 +86,9 @@ func (c *Client) registerCall(ca *Call) (uint64, error) {
 		return 0, ErrShutdown
 	}
 
+	c.seq++
 	ca.Seq = c.seq
 	c.pending[ca.Seq] = ca
-	c.seq++
 	return ca.Seq, nil
 }
 
@@ -236,7 +236,7 @@ func (c *Client) send(ca *Call) {
 	c.header.Seq = seq
 	c.header.Error = ""
 
-	fmt.Println("before cc.Write ", ca.Args)
+	fmt.Println("before cc.Write ", ca.Args, ":", seq)
 	err = c.cc.Write(&c.header, ca.Args)
 	fmt.Println("after cc.Write ", ca.Args, err)
 	if err != nil {
