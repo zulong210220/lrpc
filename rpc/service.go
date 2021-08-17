@@ -8,7 +8,6 @@ package rpc
  * */
 
 import (
-	"fmt"
 	"go/ast"
 	"log"
 	"reflect"
@@ -108,11 +107,9 @@ func (s *service) call(m *methodType, argv, replyv reflect.Value) error {
 
 	f := m.method.Func
 
-	fmt.Println("bef service.call", argv)
 	retVal := f.Call([]reflect.Value{
 		s.rcvr, argv, replyv,
 	})
-	fmt.Println("after service.call", argv, replyv)
 
 	// TODO check slice len
 	if errInter := retVal[0].Interface(); errInter != nil {

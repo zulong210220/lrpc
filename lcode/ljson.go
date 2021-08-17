@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/zulong210220/lrpc/log"
@@ -37,7 +36,6 @@ func NewJsonCodec(conn io.ReadWriteCloser) Codec {
 
 func (gc *JsonCodec) ReadHeader(h *Header) error {
 	err := gc.dec.Decode(h)
-	fmt.Println("JsonCodec.|", h, "|")
 	return err
 }
 
@@ -54,7 +52,6 @@ func (gc *JsonCodec) ReadHeader1(h *Header) error {
 		return errors.New("gob read header zero")
 	}
 
-	fmt.Println("'", string(data), "'")
 	/*
 		全部读取了数据
 		' {"ServiceMethod":"Foo.Sum","Seq":1,"Error":""}
@@ -68,14 +65,12 @@ func (gc *JsonCodec) ReadHeader1(h *Header) error {
 
 func (jc *JsonCodec) Read(msg *Message) error {
 	//data := make([]byte, BUF_SIZE)
-	fmt.Println("before js Read")
 	// TODO fix
 	var data = make([]byte, 65536)
 	n, err := jc.conn.Read(data)
 	//data, err := ioutil.ReadAll(jc.conn)
-	fmt.Println("JsonCodec.Read", string(data), n)
 	if err != nil {
-		log.Error("", "JsonCodec.Read connection data failed:", err)
+		log.Error("", "JsonCodec.Read connection datan:%d failed:", n, err)
 		if err == io.EOF {
 			// TODO
 			return err
@@ -85,19 +80,16 @@ func (jc *JsonCodec) Read(msg *Message) error {
 
 	msg.Unpack(data)
 
-	fmt.Println("----", msg)
 	return err
 }
 
 func (gc *JsonCodec) ReadBody(body interface{}) error {
 	err := gc.dec.Decode(body)
-	fmt.Println("JsonCodec.RBody.|", body, "|")
 	return err
 }
 
 func (gc *JsonCodec) ReadBody1(body interface{}) error {
 	data := make([]byte, BUF_SIZE)
-	log.Infof("before json.ReadBody", "read body ")
 	n, err := gc.conn.Read(data)
 	if err != nil {
 		log.Error("", "GobCodec.ReadBody Read connection data failed:", err)
@@ -110,7 +102,6 @@ func (gc *JsonCodec) ReadBody1(body interface{}) error {
 		return errors.New("gob read header zero")
 	}
 
-	log.Infof("gob.ReadBody", "read body %s", data)
 	b := bytes.NewBuffer(data)
 	dec := json.NewDecoder(b)
 	return dec.Decode(body)
@@ -127,7 +118,6 @@ func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 			_ = gc.Close()
 		}
 	}()
-	fmt.Println("JC Write", h, body)
 
 	var bs []byte
 	bs, err = json.Marshal(body)
@@ -135,7 +125,6 @@ func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 		log.Errorf("JsonCodec.Encode.Marshal", "rpc codec: gob error encoding body:%v", err)
 		return
 	}
-	fmt.Println("JC Write 2", h, body, string(bs))
 
 	var n int
 	msg := &Message{}
@@ -149,10 +138,9 @@ func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 
 	n, err = gc.conn.Write(bs)
 	if err != nil {
-		log.Errorf("gob.Write", "rpc codec: gob error write buffer:%v", err)
+		log.Errorf("gob.Write", "rpc codec: gob error write : %d buffer:%v", n, err)
 		return
 	}
-	log.Infof("gob.Write", "conn write n:%d '%s'", n, bs)
 
 	return
 }
@@ -180,10 +168,9 @@ func (gc *JsonCodec) Write1(h *Header, body interface{}) (err error) {
 	}
 	n, err = gc.conn.Write(b.Bytes())
 	if err != nil {
-		log.Errorf("gob.Write", "rpc codec: gob error write buffer:%v", err)
+		log.Errorf("gob.Write", "rpc codec: gob error write :%d buffer:%v", n, err)
 		return
 	}
-	log.Infof("gob.Write", "conn write n:%d", n)
 
 	return
 }

@@ -84,7 +84,6 @@ func (s *Server) Init(c *Config) {
 
 	lip, _ := utils.ExternalIP()
 	s.endpoint = lip.String() + ":" + s.getListenPort()
-	fmt.Println(s.endpoint)
 	s.stop = make(chan error)
 }
 
@@ -117,14 +116,12 @@ func (s *Server) registryEtcd() error {
 		log.Errorf("", "%s client.Grant failed err:%v", fun, err)
 		return err
 	}
-	log.Infof("", "%s client.Grant resp ID:%v TTL:%d Err:%s", fun, resp.ID, resp.TTL, resp.Error)
 
 	ps, err := s.client.Put(ctx, key, value, clientv3.WithLease(resp.ID))
 	if err != nil {
-		log.Errorf("", "%s client.Put failed err:%v", fun, err)
+		log.Errorf("", "%s client.Put ps:%+v failed err:%v", fun, ps, err)
 		return err
 	}
-	log.Infof("", "%s client.Put PrevKV:%v", fun, ps.PrevKv)
 
 	//设置续租 定期发送需求请求
 	//KeepAlive使给定的租约永远有效。 如果发布到channel的keepalive响应没有立即被使用，
@@ -151,7 +148,6 @@ func (s *Server) revoke() error {
 		log.Errorf("", "%s client.Revoke failed err:%v", fun, err)
 		return err
 	}
-	log.Info("", "撤销租约")
 	return s.client.Close()
 }
 
@@ -167,7 +163,6 @@ func (s *Server) Accept(ln net.Listener) {
 	fun := "Server.Accept"
 	for {
 		conn, err := ln.Accept()
-		fmt.Println("Accept ", conn.LocalAddr(), conn.RemoteAddr(), err)
 		if err != nil {
 			log.Errorf("", "%s rpc server accept failed err:%v", fun, err)
 			return
@@ -187,9 +182,8 @@ func (s *Server) selectLoop() {
 		case <-s.client.Ctx().Done():
 			log.Error("", "server closed")
 			// select keep alive chan 要在etcd初始化之后才有效
-		case ka, ok := <-s.keepAliveChan:
+		case _, ok := <-s.keepAliveChan:
 			if !ok {
-				log.Info("", "keep alive channel closed", ka)
 				s.revoke()
 				return
 			} else {
@@ -214,7 +208,6 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 		_ = conn.Close()
 	}()
 	var opt Option
-	fmt.Println("before Server ServeConn ReadAll")
 	//data, err := ioutil.ReadAll(conn)
 
 	var data = make([]byte, consts.HandleshakeBufLen)
@@ -223,12 +216,10 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	// also block
 	// var buf bytes.Buffer
 	// nn, err := io.Copy(&buf, conn)
-	fmt.Println("after Server ServeConn ReadAll")
 	if err != nil {
 		log.Errorf("", "%s ioutil.ReadAll options error:%v", fun, err)
 		return
 	}
-	fmt.Println("'", string(data), "'", n, err, len(string(data)))
 	//err := json.NewDecoder(conn).Decode(&opt)
 	n = 0
 	for n < len(data) {
@@ -239,7 +230,6 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	}
 	data = data[:n+1]
 	err = json.Unmarshal(data, &opt)
-	log.Infof("", "%s endpoint:%s opt:%+v", fun, s.endpoint, opt)
 	if err != nil {
 		log.Errorf("", "%s rpc server options error:%v", fun, err)
 		return
@@ -264,15 +254,13 @@ var (
 )
 
 func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
-	fun := "Server.serveCodec"
+	//fun := "Server.serveCodec"
 	sending := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 
 	for {
-		log.Infof("before readRequest", "%s endpoint:%s ", fun, s.endpoint)
 		// wait 偶尔阻塞在此
 		req, err := s.readRequest(cc)
-		log.Infof("", "%s endpoint:%s req:%+v err:%v", fun, s.endpoint, req, err)
 		if err != nil {
 			if req == nil {
 				wg = nil
@@ -287,11 +275,9 @@ func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
 		wg.Add(1)
 		go s.handleRequest(cc, req, sending, wg, opt.HandleTimeout)
 	}
-	log.Infof("before wait", "%s endpoint:%s after", fun, s.endpoint)
 	if wg != nil {
 		wg.Wait()
 	}
-	log.Infof("after wait", "%s endpoint:%s br", fun, s.endpoint)
 	_ = cc.Close()
 }
 
@@ -315,10 +301,8 @@ func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
 	fun := "Server.readRequestHeader"
 	var h lcode.Header
 
-	log.Info("before rRH", fun, " : ", s.endpoint)
 	// TODO 阻塞在此
 	err := cc.ReadHeader(&h)
-	log.Info("rRH", fun, " : ", h, " : ", s.endpoint, err)
 
 	if err != nil {
 		if err != io.EOF && err != io.ErrUnexpectedEOF {
@@ -357,10 +341,8 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 		argvi = req.argv.Addr().Interface()
 	}
 
-	log.Info("before Decode", fun, " : ", s.endpoint, " : ", req.argv, " : ", string(msg.B))
 	//err = cc.ReadBody(argvi)
 	err = cc.Decode(msg.B, argvi)
-	log.Info("after Decode", fun, " : ", s.endpoint, " : ", req.argv, " : ", argvi)
 	if err != nil {
 		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
 	}
@@ -380,10 +362,8 @@ func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{},
 }
 
 func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
-	fun := "Server.handleRequest"
+	//fun := "Server.handleRequest"
 	defer wg.Done()
-	log.Info("hR", fun, " : ", req.Header(), " : ", req.argv, " : ", s.endpoint)
-	fmt.Println("hR... ", req.Header(), req.argv)
 
 	called := make(chan struct{})
 	send := make(chan struct{})
@@ -392,21 +372,17 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 		// 此处真正执行代码逻辑
 		err := req.svc.call(req.mType, req.argv, req.replyv)
 		called <- struct{}{}
-		fmt.Println("go func called", err)
 		if err != nil {
 			req.h.Error = err.Error()
 			s.sendResponse(cc, req.h, invalidRequest, sending)
 			send <- struct{}{}
-			fmt.Println("go func error send")
 			return
 		}
 
 		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 		send <- struct{}{}
-		fmt.Println("go func send")
 	}()
 
-	fmt.Println("timeout ", timeout)
 	if timeout == 0 {
 		<-called
 		<-send
@@ -415,11 +391,9 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 
 	select {
 	case <-time.After(timeout):
-		fmt.Println("tm After")
 		req.h.Error = fmt.Sprintf("rpc server: request handle timeout %s", timeout)
 		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 	case <-called:
-		fmt.Println("called")
 		<-send
 	}
 }

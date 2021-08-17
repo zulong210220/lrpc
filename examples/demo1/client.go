@@ -43,9 +43,7 @@ func main() {
 		var err error
 		ctx := context.Background()
 		//ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		fmt.Println("bef call")
 		err = xc.Call(ctx, sn, "Foo.Sum", &rpc.Args{Num1: i, Num2: i * i}, &reply)
-		fmt.Println("after call")
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}

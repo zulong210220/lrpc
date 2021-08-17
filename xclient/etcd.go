@@ -63,7 +63,6 @@ func (ed *EtcdDiscovery) watchService(s string) {
 		log.Errorf("", "%s client.Get path:%s err:%v", fun, path, err)
 		return
 	}
-	log.Infof("", "watchServices %s %s resp:%+v", path, s, resp)
 
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
@@ -88,11 +87,9 @@ func (ed *EtcdDiscovery) GetRegPath(s string) string {
 // ll/kk/app/ip:port
 func (ed *EtcdDiscovery) watcher(path string) {
 	rch := ed.client.Watch(context.Background(), path, clientv3.WithPrefix())
-	log.Infof("", "watching prefix:%s now...", path)
 
 	for wresp := range rch {
 		for _, ev := range wresp.Events {
-			log.Infof("etcd watch", "wresp events %+v", ev)
 			switch ev.Type {
 			case mvccpb.PUT: //修改或者新增
 				ed.SetServices(path, getEndpointFromKey(string(ev.Kv.Key)))
@@ -101,7 +98,6 @@ func (ed *EtcdDiscovery) watcher(path string) {
 			}
 		}
 	}
-	log.Infof("", "watching prefix:%s ending...", path)
 }
 
 // service name
@@ -122,13 +118,11 @@ func getEndpointFromKey(key string) string {
 }
 
 func (ed *EtcdDiscovery) SetServices(path, endpoint string) {
-	log.Infof("etcd", "Set services path:%s endpoint:%s", path, endpoint)
 	// TODO
 	s := getSNFromPath(path)
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
 
-	log.Infof("etcd", "services:%+v, before %s", ed.services[s], s)
 	if ed.services[s] == nil {
 		ed.services[s] = []string{endpoint}
 		return
@@ -141,16 +135,13 @@ func (ed *EtcdDiscovery) SetServices(path, endpoint string) {
 		}
 	}
 
-	log.Infof("etcd before", "services:%+v, s:%s exist:%v", ed.services[s], s, exist)
 	if !exist {
 		ed.services[s] = append(ed.services[s], endpoint)
 	}
-	log.Infof("etcd after", "services:%+v, s:%s exist:%v", ed.services[s], s, exist)
 	return
 }
 
 func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
-	log.Infof("etcd", "Del services path:%s endpoint:%s", path, endpoint)
 	// TODO
 	s := getSNFromPath(path)
 	ed.mu.Lock()
@@ -160,7 +151,6 @@ func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
 		return
 	}
 
-	log.Infof("etcd before", "Del services path:%s endpoint:%s servers:%+v", path, endpoint, ed.services[s])
 	es := []string{}
 	for _, e := range ed.services[s] {
 		if e == endpoint {
@@ -171,7 +161,6 @@ func (ed *EtcdDiscovery) DelServices(path, endpoint string) {
 
 	ed.services[s] = es
 
-	log.Infof("etcd after", "Del services path:%s endpoint:%s servers:%+v", path, endpoint, ed.services[s])
 	return
 }
 
@@ -226,10 +215,8 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 	ctx := context.Background()
 	res := []string{}
 
-	log.Infof("", "%s before get ...sn:%s", fun, sn)
 	key := ed.GetRegPath(sn)
 	resp, err := ed.client.Get(ctx, key, clientv3.WithPrefix())
-	log.Infof("", "%s get %s...resp:%+v err:%v", fun, key, resp, err)
 	if err != nil {
 		log.Errorf("%s client get key:%s err:%v", fun, key, err)
 		return res, err
@@ -238,7 +225,6 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 	if resp.Count <= 0 {
 		return res, err
 	}
-	log.Infof("", "%s get %+v", fun, resp)
 	for _, kv := range resp.Kvs {
 		res = append(res, getEndpointFromKey(string(kv.Key)))
 	}
@@ -252,14 +238,12 @@ func (ed *EtcdDiscovery) p2cNext(sn string) (string, error) {
 
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
-	fmt.Println("---- ", n)
 	if n == 0 {
 		res, err := ed.GetService(sn)
 		if err != nil {
 			log.Errorf("", "Etcd Discovery GetService %s failed err:%v", sn, err)
 			return "", err
 		}
-		fmt.Println(sn, res)
 		if len(res) == 0 {
 			return "", errors.New("rpc discovery: no avaialable servers")
 		}

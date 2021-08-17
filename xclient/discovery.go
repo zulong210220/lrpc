@@ -137,7 +137,6 @@ func (rd *RegistryDiscovery) Refresh() error {
 		return nil
 	}
 
-	log.Infof("", "%s rpc registry: refresh servers from registry: %s", fun, rd.registry)
 	resp, err := http.Get(rd.registry)
 	if err != nil {
 		log.Errorf("", "%s rpc registry refresh err:%v", fun, err)
