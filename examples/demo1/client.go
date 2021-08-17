@@ -33,12 +33,12 @@ func main() {
 		[]string{"127.0.0.1:2379"},
 		//[]string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
 		1, []string{sn})
-	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
+	xc := xclient.NewXClient(d, xclient.P2cSelect, nil)
 	defer func() { _ = xc.Close() }()
 
 	//TODO 二次连接panic
 	time.Sleep(1000 * time.Millisecond)
-	for i := 1; i < 9; i++ {
+	for i := 1; i < 999; i++ {
 		var reply int
 		var err error
 		ctx := context.Background()

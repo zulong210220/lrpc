@@ -29,6 +29,7 @@ func NewEtcdDiscovery(ea []string, et int, ss []string) *EtcdDiscovery {
 	ed := &EtcdDiscovery{
 		services: make(map[string][]string),
 		r:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		p2cs:     make(map[string][]*peakEwmaNode),
 	}
 
 	config := clientv3.Config{
@@ -227,7 +228,7 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 
 	log.Infof("", "%s before get ...sn:%s", fun, sn)
 	key := ed.GetRegPath(sn)
-	resp, err := ed.client.Get(ctx, key, clientv3.WithPrevKV())
+	resp, err := ed.client.Get(ctx, key, clientv3.WithPrefix())
 	log.Infof("", "%s get %s...resp:%+v err:%v", fun, key, resp, err)
 	if err != nil {
 		log.Errorf("%s client get key:%s err:%v", fun, key, err)
@@ -238,8 +239,8 @@ func (ed *EtcdDiscovery) GetService(sn string) ([]string, error) {
 		return res, err
 	}
 	log.Infof("", "%s get %+v", fun, resp)
-	for k, _ := range resp.Kvs {
-		res = append(res, getEndpointFromKey(string(k)))
+	for _, kv := range resp.Kvs {
+		res = append(res, getEndpointFromKey(string(kv.Key)))
 	}
 
 	return res, err

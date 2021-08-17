@@ -86,9 +86,9 @@ func (c *Client) registerCall(ca *Call) (uint64, error) {
 		return 0, ErrShutdown
 	}
 
-	c.seq++
 	ca.Seq = c.seq
 	c.pending[ca.Seq] = ca
+	c.seq++
 	return ca.Seq, nil
 }
 
@@ -123,29 +123,30 @@ func (c *Client) receive() {
 		fun = "Client.receive"
 	)
 	for err == nil {
-		var h lcode.Header
-		err = c.cc.ReadHeader(&h)
+		msg := &lcode.Message{H: &lcode.Header{}}
+		err = c.cc.Read(msg)
 		// TODO conn关闭会报错
 		if err != nil {
 			log.Errorf("", "%s ReadHeader failed err:%v", fun, err)
 			break
 		}
 
+		h := msg.H
 		ca := c.removeCall(h.Seq)
 		if ca != nil {
-			fmt.Printf("c.receive ctx after Do ca:%+v done:%d h:%+v %v\n", ca, len(ca.Done), h, time.Now())
+			fmt.Printf("c.receive ctx after Do ca:%+v done:%d h:%+v %v\n", ca, len(ca.Done), h.Seq, time.Now())
 		} else {
 			fmt.Printf("c.receive ctx after Do ca:%+v h:%+v %v\n", ca, h, time.Now())
 		}
+
 		switch {
 		case ca == nil:
-			err = c.cc.ReadBody(nil)
 		case h.Error != "":
 			ca.Error = errors.New(h.Error)
-			err = c.cc.ReadBody(nil)
 			ca.done()
 		default:
-			err = c.cc.ReadBody(ca.Reply)
+			//err = c.cc.ReadBody(ca.Reply)
+			err = c.cc.Decode(msg.B, ca.Reply)
 			if err != nil {
 				ca.Error = fmt.Errorf("%s reading body err:%v", fun, err)
 			}
@@ -166,12 +167,25 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 		return nil, err
 	}
 
-	err := json.NewEncoder(conn).Encode(opt)
+	//err := json.NewEncoder(conn).Encode(opt)
+	data, err := json.Marshal(opt)
 	if err != nil {
 		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
 		_ = conn.Close()
 		return nil, err
 	}
+
+	buf := make([]byte, consts.HandleshakeBufLen)
+	var n int
+	copy(buf, data)
+	n, err = conn.Write(buf)
+	if err != nil {
+		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
+		_ = conn.Close()
+		return nil, err
+	}
+	fmt.Println("NewClient write ", n, " : ", string(data), len(data))
+	fmt.Println("----", conn.LocalAddr(), conn.RemoteAddr())
 
 	return newClientCodec(f(conn), opt), nil
 }

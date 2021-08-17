@@ -214,7 +214,31 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 		_ = conn.Close()
 	}()
 	var opt Option
-	err := json.NewDecoder(conn).Decode(&opt)
+	fmt.Println("before Server ServeConn ReadAll")
+	//data, err := ioutil.ReadAll(conn)
+
+	var data = make([]byte, consts.HandleshakeBufLen)
+	n, err := conn.Read(data)
+
+	// also block
+	// var buf bytes.Buffer
+	// nn, err := io.Copy(&buf, conn)
+	fmt.Println("after Server ServeConn ReadAll")
+	if err != nil {
+		log.Errorf("", "%s ioutil.ReadAll options error:%v", fun, err)
+		return
+	}
+	fmt.Println("'", string(data), "'", n, err, len(string(data)))
+	//err := json.NewDecoder(conn).Decode(&opt)
+	n = 0
+	for n < len(data) {
+		if data[n] == '}' {
+			break
+		}
+		n++
+	}
+	data = data[:n+1]
+	err = json.Unmarshal(data, &opt)
 	log.Infof("", "%s endpoint:%s opt:%+v", fun, s.endpoint, opt)
 	if err != nil {
 		log.Errorf("", "%s rpc server options error:%v", fun, err)
@@ -333,7 +357,7 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 		argvi = req.argv.Addr().Interface()
 	}
 
-	log.Info("before Decode", fun, " : ", s.endpoint, " : ", req.argv)
+	log.Info("before Decode", fun, " : ", s.endpoint, " : ", req.argv, " : ", string(msg.B))
 	//err = cc.ReadBody(argvi)
 	err = cc.Decode(msg.B, argvi)
 	log.Info("after Decode", fun, " : ", s.endpoint, " : ", req.argv, " : ", argvi)
@@ -368,7 +392,7 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 		// 此处真正执行代码逻辑
 		err := req.svc.call(req.mType, req.argv, req.replyv)
 		called <- struct{}{}
-		fmt.Println("go func called")
+		fmt.Println("go func called", err)
 		if err != nil {
 			req.h.Error = err.Error()
 			s.sendResponse(cc, req.h, invalidRequest, sending)

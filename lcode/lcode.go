@@ -8,11 +8,6 @@ type Header struct {
 	Error         string
 }
 
-type Message struct {
-	H *Header
-	B []byte
-}
-
 type Codec interface {
 	io.Closer
 	ReadHeader(*Header) error
