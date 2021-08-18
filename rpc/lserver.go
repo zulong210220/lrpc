@@ -205,7 +205,10 @@ func Accept(ln net.Listener) {
 func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	fun := "Server.ServeConn"
 	defer func() {
-		_ = conn.Close()
+		err := conn.Close()
+		if err != nil {
+			log.Errorf("Close", "Server.ServeConn Close failed err:%v", err)
+		}
 	}()
 	var opt Option
 	//data, err := ioutil.ReadAll(conn)
@@ -229,6 +232,7 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 		n++
 	}
 	data = data[:n+1]
+
 	err = json.Unmarshal(data, &opt)
 	if err != nil {
 		log.Errorf("", "%s rpc server options error:%v", fun, err)
@@ -278,7 +282,6 @@ func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
 	if wg != nil {
 		wg.Wait()
 	}
-	_ = cc.Close()
 }
 
 type request struct {
