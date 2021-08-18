@@ -3,6 +3,7 @@ package lcode
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -66,16 +67,30 @@ func (gc *JsonCodec) ReadHeader1(h *Header) error {
 func (jc *JsonCodec) Read(msg *Message) error {
 	//data := make([]byte, BUF_SIZE)
 	// TODO fix
-	var data = make([]byte, 65536)
+	//var data = make([]byte, 65536)
+	var data = make([]byte, 4)
 	n, err := jc.conn.Read(data)
 	//data, err := ioutil.ReadAll(jc.conn)
 	if err != nil {
-		log.Error("", "JsonCodec.Read connection datan:%d failed:", n, err)
+		log.Errorf("", "JsonCodec.Read connection data n:%d failed err:%v", n, err)
 		if err == io.EOF {
 			// TODO
 			return err
 		}
 		return err
+	}
+
+	total := binary.BigEndian.Uint32(data)
+
+	data = make([]byte, total)
+	n, err = jc.conn.Read(data)
+	//data, err := ioutil.ReadAll(jc.conn)
+	if err != nil {
+		log.Errorf("", "JsonCodec.Read connection data n:%d failed:%v", n, err)
+		if err == io.EOF {
+			// TODO
+			return err
+		}
 	}
 
 	msg.Unpack(data)
@@ -135,6 +150,16 @@ func (gc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 	if err != nil {
 		return
 	}
+
+	dataBuf := bytes.NewBuffer([]byte{})
+	err = binary.Write(dataBuf, binary.BigEndian, uint32(len(bs)))
+	//err = binary.Write(gc.conn, binary.BigEndian, uint32(len(bs)))
+	if err != nil {
+		log.Errorf("gob.Write", "binary Write len buffer:%v", err)
+		return
+	}
+	tbs := dataBuf.Bytes()
+	n, err = gc.conn.Write(tbs)
 
 	n, err = gc.conn.Write(bs)
 	if err != nil {
