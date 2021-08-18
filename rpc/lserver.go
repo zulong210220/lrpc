@@ -35,7 +35,7 @@ type Option struct {
 
 var DefaultOption = &Option{
 	MagicNumber:    MagicNumber,
-	CodecType:      lcode.JsonType,
+	CodecType:      lcode.GobType,
 	ConnectTimeout: 3 * time.Second,
 }
 
@@ -163,6 +163,7 @@ func (s *Server) Accept(ln net.Listener) {
 	fun := "Server.Accept"
 	for {
 		conn, err := ln.Accept()
+		fmt.Println("Accept", conn.LocalAddr(), conn.LocalAddr())
 		if err != nil {
 			log.Errorf("", "%s rpc server accept failed err:%v", fun, err)
 			return
@@ -300,28 +301,8 @@ func (r *request) Header() *lcode.Header {
 	return h
 }
 
-func (s *Server) readRequestHeader(cc lcode.Codec) (*lcode.Header, error) {
-	fun := "Server.readRequestHeader"
-	var h lcode.Header
-
-	// TODO 阻塞在此
-	err := cc.ReadHeader(&h)
-
-	if err != nil {
-		if err != io.EOF && err != io.ErrUnexpectedEOF {
-			log.Errorf("", "%s rpc server read header error:%v", fun, err)
-		}
-		return nil, err
-	}
-	return &h, nil
-}
-
 func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	fun := "Server.readRequest"
-	//	h, err := s.readRequestHeader(cc)
-	//	if err != nil {
-	//		return nil, err
-	//	}
 
 	msg := &lcode.Message{H: &lcode.Header{}}
 	err := cc.Read(msg)

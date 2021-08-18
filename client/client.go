@@ -34,15 +34,14 @@ func (c *Call) done() {
 }
 
 type Client struct {
-	cc       lcode.Codec
-	opt      *rpc.Option
-	sending  sync.Mutex
-	header   lcode.Header
-	mu       sync.Mutex
-	seq      uint64
-	pending  map[uint64]*Call
-	closing  int32
-	shutdown int32
+	cc      lcode.Codec
+	opt     *rpc.Option
+	sending sync.Mutex
+	header  lcode.Header
+	mu      sync.Mutex
+	seq     uint64
+	pending map[uint64]*Call
+	closing int32 // 关闭 就表示不可用
 }
 
 var (
@@ -52,8 +51,7 @@ var (
 )
 
 const (
-	StatusClosing  = 1
-	StatusShutdown = 1
+	StatusClosing = 1
 )
 
 func (c *Client) Close() error {
@@ -73,7 +71,7 @@ func (c *Client) Close() error {
 
 func (c *Client) IsAvailable() bool {
 	// TODO lock
-	return atomic.LoadInt32(&c.shutdown) != StatusShutdown && atomic.LoadInt32(&c.closing) != StatusClosing
+	return atomic.LoadInt32(&c.closing) != StatusClosing
 }
 
 func (c *Client) registerCall(ca *Call) (uint64, error) {
@@ -107,7 +105,7 @@ func (c *Client) terminateCalls(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	atomic.StoreInt32(&c.shutdown, StatusShutdown)
+	atomic.StoreInt32(&c.closing, StatusClosing)
 
 	for _, ca := range c.pending {
 		ca.Error = err

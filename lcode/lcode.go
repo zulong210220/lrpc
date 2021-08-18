@@ -10,8 +10,6 @@ type Header struct {
 
 type Codec interface {
 	io.Closer
-	ReadHeader(*Header) error
-	ReadBody(interface{}) error
 	Read(*Message) error
 	Write(*Header, interface{}) error
 	Decode([]byte, interface{}) error

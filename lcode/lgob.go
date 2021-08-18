@@ -1,10 +1,9 @@
 package lcode
 
 import (
-	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
-	"errors"
 	"io"
 
 	"github.com/zulong210220/lrpc/log"
@@ -12,9 +11,6 @@ import (
 
 type GobCodec struct {
 	conn io.ReadWriteCloser
-	buf  *bufio.Writer
-	dec  *gob.Decoder
-	enc  *gob.Encoder
 }
 
 var (
@@ -22,42 +18,43 @@ var (
 )
 
 func NewGobCodec(conn io.ReadWriteCloser) Codec {
-	buf := bufio.NewWriter(conn)
 
 	return &GobCodec{
 		conn: conn,
-		buf:  buf,
-		dec:  gob.NewDecoder(conn),
-		enc:  gob.NewEncoder(buf),
 	}
 }
 
 // ---
 
-const (
-	BUF_SIZE = 1024 * 1024
-)
-
-func (gc *GobCodec) ReadHeader(h *Header) error {
-	data := make([]byte, 256)
+func (gc *GobCodec) Read(msg *Message) error {
+	fun := "GobCodec.Read"
+	// TODO fix
+	var data = make([]byte, 4)
 	n, err := gc.conn.Read(data)
 	if err != nil {
-		log.Error("", "GobCodec.ReadBody Read connection data failed:", err)
+		log.Errorf("GCR", "%s connection total n:%d failed err:%v", fun, n, err)
 		if err == io.EOF {
+			// TODO
+			return err
 		}
 		return err
 	}
-	if n == 0 {
-		return errors.New("gob read header zero")
+
+	total := binary.BigEndian.Uint32(data)
+
+	data = make([]byte, total)
+	n, err = gc.conn.Read(data)
+	if err != nil {
+		log.Errorf("GCR", "%s connection data n:%d failed err:%v", fun, n, err)
+		if err == io.EOF {
+			// TODO
+			return err
+		}
 	}
 
-	b := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(b)
-	return dec.Decode(&h)
-}
+	err = msg.Unpack(data)
 
-func (gc *GobCodec) Read(msg *Message) error {
-	return nil
+	return err
 }
 
 func (gc *GobCodec) Decode(data []byte, body interface{}) error {
@@ -66,50 +63,50 @@ func (gc *GobCodec) Decode(data []byte, body interface{}) error {
 	return dec.Decode(body)
 }
 
-func (gc *GobCodec) ReadBody(body interface{}) error {
-	data := make([]byte, BUF_SIZE)
-	n, err := gc.conn.Read(data)
-	if err != nil {
-		log.Error("", "GobCodec.ReadBody Read connection data failed:", err)
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-	if n == 0 {
-		return errors.New("gob read header zero")
-	}
-
-	b := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(b)
-	return dec.Decode(body)
-}
-
 func (gc *GobCodec) Write(h *Header, body interface{}) (err error) {
+	fun := "GobCodec.Write"
 	defer func() {
-		_ = gc.buf.Flush()
 		if err != nil {
 			_ = gc.Close()
 		}
 	}()
 
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-
-	if err = enc.Encode(h); err != nil {
-		log.Errorf("gob.Encode.Write", "rpc codec: gob error encoding header:%v", err)
-		return
-	}
-
-	if err = enc.Encode(body); err != nil {
-		log.Errorf("gob.Encode.Write", "rpc codec: gob error encoding body:%v", err)
-		return
-	}
-	var n int
-	n, err = gc.conn.Write(b.Bytes())
+	buf := bytes.NewBuffer([]byte{})
+	enc := gob.NewEncoder(buf)
+	err = enc.Encode(body)
 	if err != nil {
-		log.Errorf("gob.Write", "rpc codec: gob error write:%d buffer:%v", n, err)
+		log.Errorf("GEM", "%s rpc codec: gob Encode failed error :%v", fun, err)
 		return
+	}
+
+	var n int
+	bs := buf.Bytes()
+	msg := &Message{}
+	msg.H = h
+	msg.B = bs
+
+	bs, err = msg.Pack()
+	if err != nil {
+		return
+	}
+
+	dataBuf := bytes.NewBuffer([]byte{})
+	err = binary.Write(dataBuf, binary.BigEndian, uint32(len(bs)))
+	if err != nil {
+		log.Errorf("GC", "%s binary Write len buffer:%v", fun, err)
+		return
+	}
+
+	tbs := dataBuf.Bytes()
+	n, err = gc.conn.Write(tbs)
+	if err != nil {
+		log.Errorf("GC", "%s rpc codec: json error write : %d total :%v", fun, n, err)
+		return
+	}
+
+	n, err = gc.conn.Write(bs)
+	if err != nil {
+		log.Errorf("GC", "%s rpc codec: json error write : %d buffer :%v", fun, n, err)
 	}
 
 	return

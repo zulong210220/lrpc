@@ -33,12 +33,13 @@ func main() {
 		[]string{"127.0.0.1:2379"},
 		//[]string{"127.0.0.1:4001", "127.0.0.1:5001", "127.0.0.1:6001"},
 		1, []string{sn})
-	xc := xclient.NewXClient(d, xclient.P2cSelect, nil)
+	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, nil)
 	defer func() { _ = xc.Close() }()
 
 	//TODO 二次连接panic
 	time.Sleep(1000 * time.Millisecond)
-	for i := 1; i < 999; i++ {
+	now := time.Now()
+	for i := 1; i < 9999999; i++ {
 		var reply int
 		var err error
 		ctx := context.Background()
@@ -47,10 +48,12 @@ func main() {
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}
-		log.Infof("", "Call [%d] reply:%d", i, reply)
+		if reply != i+i*i {
+			log.Infof("", "Call [%d] reply:%d", i, reply)
+		}
 	}
-	log.Infof("", "Call over...")
-	fmt.Println("all over......")
+	log.Info("", "Call over...", time.Since(now))
+	fmt.Println("all over......", time.Since(now))
 
 	// sleep wait log flush
 	//time.Sleep(1000 * time.Millisecond)

@@ -1,41 +1,35 @@
 package lcode
 
+/*
+ * Author : lijinya
+ * Email : yajin160305@gmail.com
+ * File : lgogoproto.go
+ * CreateDate : 2021-08-18 16:13:51
+ * */
+
 import (
 	"bytes"
 	"encoding/binary"
 	"io"
 
-	jsoniter "github.com/json-iterator/go"
-
+	goproto "github.com/gogo/protobuf/proto"
 	"github.com/zulong210220/lrpc/log"
 )
 
-type JsonCodec struct {
+type GoProtoCodec struct {
 	conn io.ReadWriteCloser
 }
 
-var (
-	_ Codec = (*JsonCodec)(nil)
-)
-
-func NewJsonCodec(conn io.ReadWriteCloser) Codec {
-
-	return &JsonCodec{
+func NewGoProtoCodec(conn io.ReadWriteCloser) *GoProtoCodec {
+	return &GoProtoCodec{
 		conn: conn,
 	}
 }
 
 // ---
 
-/*
-	全部读取了数据
-	' {"ServiceMethod":"Foo.Sum","Seq":1,"Error":""}
-	{"Num1":1,"Num2":1}
-	 '
-*/
-
-func (jc *JsonCodec) Read(msg *Message) error {
-	fun := "JsonCodec.Read"
+func (jc *GoProtoCodec) Read(msg *Message) error {
+	fun := "GoProtoCodec.Read"
 	// TODO fix
 	var data = make([]byte, 4)
 	n, err := jc.conn.Read(data)
@@ -65,22 +59,22 @@ func (jc *JsonCodec) Read(msg *Message) error {
 	return err
 }
 
-func (jc *JsonCodec) Decode(data []byte, body interface{}) error {
-	return jsoniter.Unmarshal(data, body)
+func (jc *GoProtoCodec) Decode(data []byte, body goproto.Message) error {
+	return goproto.Unmarshal(data, body)
 }
 
-func (jc *JsonCodec) Write(h *Header, body interface{}) (err error) {
-	fun := "JsonCodec.Write"
+func (pc *GoProtoCodec) Write(h *Header, body goproto.Message) (err error) {
+	fun := "GoProtoCodec.Write"
 	defer func() {
 		if err != nil {
-			_ = jc.Close()
+			_ = pc.Close()
 		}
 	}()
 
 	var bs []byte
-	bs, err = jsoniter.Marshal(body)
+	bs, err = goproto.Marshal(body)
 	if err != nil {
-		log.Errorf("JEM", "%s rpc codec: json Marshal failed error :%v", fun, err)
+		log.Errorf("JEM", "%s rpc codec: goproto Marshal failed error :%v", fun, err)
 		return
 	}
 
@@ -102,22 +96,22 @@ func (jc *JsonCodec) Write(h *Header, body interface{}) (err error) {
 	}
 
 	tbs := dataBuf.Bytes()
-	n, err = jc.conn.Write(tbs)
+	n, err = pc.conn.Write(tbs)
 	if err != nil {
-		log.Errorf("JC", "%s rpc codec: json error write : %d total :%v", fun, n, err)
+		log.Errorf("JC", "%s rpc codec: goproto error write : %d total :%v", fun, n, err)
 		return
 	}
 
-	n, err = jc.conn.Write(bs)
+	n, err = pc.conn.Write(bs)
 	if err != nil {
-		log.Errorf("JC", "%s rpc codec: json error write : %d buffer :%v", fun, n, err)
+		log.Errorf("JC", "%s rpc codec: goproto error write : %d buffer :%v", fun, n, err)
 	}
 
 	return
 }
 
-func (gc *JsonCodec) Close() error {
-	return gc.conn.Close()
+func (pc *GoProtoCodec) Close() error {
+	return pc.conn.Close()
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */
