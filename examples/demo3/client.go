@@ -15,6 +15,8 @@ import (
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/xclient"
+
+	"github.com/golang/protobuf/proto"
 )
 
 func main() {
@@ -47,16 +49,23 @@ func main() {
 	time.Sleep(1000 * time.Millisecond)
 	now := time.Now()
 	for i := 1; i < 9999; i++ {
-		var reply models.Reply
+		var reply models.GogoProtoColorGroupRsp
 		var err error
 		ctx := context.Background()
 		//ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		err = xc.Call(ctx, sn, "Foo.Sum", &models.Args{Num1: i, Num2: i * i}, &reply)
+
+		gogoProtobufGroup := models.GogoProtoColorGroup{
+			Id:     proto.Int32(int32(i)),
+			Name:   proto.String("Reds"),
+			Colors: []string{"Crimson", "Red", "Ruby", "Maroon"},
+		}
+
+		err = xc.Call(ctx, sn, "Gogo.Demo", &gogoProtobufGroup, &reply)
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}
 		//if reply.Num != i+i*i {
-		log.Infof("", "Call [%d] reply:%d", i, reply)
+		log.Infof("", "Call [%d] reply:%d", i, *reply.Id)
 		//}
 
 	}

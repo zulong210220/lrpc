@@ -28,8 +28,10 @@ type NewCodecFunc func(io.ReadWriteCloser) Codec
 type Type string
 
 const (
-	GobType  Type = "application/gob"
-	JsonType Type = "application/json"
+	GobType     Type = "application/gob"
+	JsonType    Type = "application/json"
+	ProtoType   Type = "application/proto"
+	GoProtoType Type = "application/gogoproto"
 )
 
 var (
@@ -40,6 +42,8 @@ func Init() {
 	NewCodecFuncMap = make(map[Type]NewCodecFunc)
 	NewCodecFuncMap[GobType] = NewGobCodec
 	NewCodecFuncMap[JsonType] = NewJsonCodec
+	NewCodecFuncMap[ProtoType] = NewProtoCodec
+	NewCodecFuncMap[GoProtoType] = NewGoProtoCodec
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

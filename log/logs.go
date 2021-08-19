@@ -233,43 +233,6 @@ func (l *Logger) write(a *Atom) {
 	l.s++
 }
 
-func (l *Logger) format(a *Atom) (int, []byte) {
-	w := l.bytePool.Get().(*bytes.Buffer)
-	defer func() {
-		w.Reset()
-		l.bytePool.Put(w)
-	}()
-	now := time.Now()
-	t := now.Nanosecond() / 1000
-	year, month, day := now.Date()
-	hour, minute, second := now.Clock()
-	w.Write([]byte{byte(year/10) + 48, byte(year%10) + 48, '-',
-		byte(month/10) + 48, byte(month%10) + 48, '-',
-		byte(day/10) + 48, byte(day%10) + 48, ' ',
-		byte(hour/10) + 48, byte(hour%10) + 48, ':',
-		byte(minute/10) + 48, byte(minute%10) + 48, ':',
-		byte(second/10) + 48, byte(second%10) + 48, '.',
-		byte((t%1000000)/100000) + 48, byte((t%100000)/10000) + 48, byte((t%10000)/1000) + 48, ' ',
-	})
-	w.WriteString(levelText[a.level])
-	w.WriteByte(' ')
-	w.WriteString(a.file)
-	w.Write([]byte{':', byte((a.line%10000)/1000) + 48, byte((a.line%1000)/100) + 48,
-		byte((a.line%100)/10) + 48, byte(a.line%10) + 48, ' '})
-	if len(a.format) == 0 {
-		w.WriteByte(' ')
-		fmt.Fprint(w, a.args...)
-	} else {
-		w.WriteByte(' ')
-		fmt.Fprintf(w, a.format, a.args...)
-	}
-	w.WriteByte(10)
-	len := w.Len()
-	data := make([]byte, len)
-	copy(data, w.Bytes())
-	return len, data
-}
-
 func (l *Logger) rm() {
 	out, err := exec.Command("ls", l.dir).Output()
 	if err != nil {

@@ -8,7 +8,8 @@ import (
 type Foo int
 
 type Args struct {
-	Num1, Num2 int
+	Num1 int
+	Num2 int
 }
 
 func (a *Args) Reset() {
