@@ -1,7 +1,6 @@
 package lcode
 
 import (
-	"bytes"
 	"encoding/binary"
 	"io"
 
@@ -78,11 +77,15 @@ func (jc *JsonCodec) Write(h *Header, body IMessage) (err error) {
 	}()
 
 	var bs []byte
-	bs, err = jsoniter.Marshal(body)
+	//bs, err = jsoniter.Marshal(body)
+	buffer := GetBuffer()
+	err = jsoniter.NewEncoder(buffer).Encode(body)
 	if err != nil {
 		log.Errorf("JEM", "%s rpc codec: json Marshal failed error :%v", fun, err)
 		return
 	}
+	bs = buffer.Bytes()
+	PutBuffer(buffer)
 
 	var n int
 	msg := &Message{}
@@ -94,7 +97,7 @@ func (jc *JsonCodec) Write(h *Header, body IMessage) (err error) {
 		return
 	}
 
-	dataBuf := bytes.NewBuffer([]byte{})
+	dataBuf := GetBuffer()
 	err = binary.Write(dataBuf, binary.BigEndian, uint32(len(bs)))
 	if err != nil {
 		log.Errorf("JC", "%s binary Write len buffer:%v", fun, err)
@@ -102,6 +105,8 @@ func (jc *JsonCodec) Write(h *Header, body IMessage) (err error) {
 	}
 
 	tbs := dataBuf.Bytes()
+	PutBuffer(buffer)
+
 	n, err = jc.conn.Write(tbs)
 	if err != nil {
 		log.Errorf("JC", "%s rpc codec: json error write : %d total :%v", fun, n, err)

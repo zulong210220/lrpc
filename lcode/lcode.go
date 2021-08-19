@@ -1,6 +1,10 @@
 package lcode
 
-import "io"
+import (
+	"bytes"
+	"io"
+	"sync"
+)
 
 type Header struct {
 	ServiceMethod string
@@ -44,6 +48,22 @@ func Init() {
 	NewCodecFuncMap[JsonType] = NewJsonCodec
 	NewCodecFuncMap[ProtoType] = NewProtoCodec
 	NewCodecFuncMap[GoProtoType] = NewGoProtoCodec
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+func GetBuffer() *bytes.Buffer {
+	buffer := bufferPool.Get().(*bytes.Buffer)
+	return buffer
+}
+
+func PutBuffer(buffer *bytes.Buffer) {
+	buffer.Reset()
+	bufferPool.Put(buffer)
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

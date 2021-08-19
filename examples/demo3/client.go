@@ -40,7 +40,8 @@ func main() {
 		1, []string{sn})
 	xc := xclient.NewXClient(d, xclient.RoundRobinSelect, &rpc.Option{
 		MagicNumber: rpc.MagicNumber,
-		CodecType:   lcode.GoProtoType,
+		CodecType:   lcode.JsonType,
+		//CodecType:   lcode.GoProtoType,
 		//CodecType:      lcode.ProtoType,
 		ConnectTimeout: 3 * time.Second,
 	})
