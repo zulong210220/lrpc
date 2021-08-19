@@ -5,6 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/zulong210220/lrpc/models"
+
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/rpc"
@@ -31,7 +33,7 @@ func main() {
 		ServerName:  "demo1",
 	})
 
-	var f rpc.Foo
+	var f models.Foo
 
 	s.Register(&f)
 	go s.Run()

@@ -254,8 +254,22 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 	s.serveCodec(f(conn), &opt)
 }
 
+type (
+	InvalidRequest struct{}
+)
+
+func (ir *InvalidRequest) Reset() {
+
+}
+func (ir *InvalidRequest) String() string {
+	return "invalid request"
+}
+func (ir *InvalidRequest) ProtoMessage() {
+
+}
+
 var (
-	invalidRequest = struct{}{}
+	invalidRequest = &InvalidRequest{}
 )
 
 func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
@@ -326,14 +340,14 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	}
 
 	//err = cc.ReadBody(argvi)
-	err = cc.Decode(msg.B, argvi)
+	err = cc.Decode(msg.B, argvi.(lcode.IMessage))
 	if err != nil {
 		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
 	}
 	return req, err
 }
 
-func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body interface{}, sending *sync.Mutex) {
+func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body lcode.IMessage, sending *sync.Mutex) {
 	fun := "Server.sendResponse"
 
 	sending.Lock()
@@ -363,7 +377,7 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 			return
 		}
 
-		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+		s.sendResponse(cc, req.h, req.replyv.Interface().(lcode.IMessage), sending)
 		send <- struct{}{}
 	}()
 
@@ -376,7 +390,7 @@ func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex
 	select {
 	case <-time.After(timeout):
 		req.h.Error = fmt.Sprintf("rpc server: request handle timeout %s", timeout)
-		s.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+		s.sendResponse(cc, req.h, req.replyv.Interface().(lcode.IMessage), sending)
 	case <-called:
 		<-send
 	}

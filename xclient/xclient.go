@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zulong210220/lrpc/lcode"
+
 	"github.com/zulong210220/lrpc/log"
 
 	"github.com/zulong210220/lrpc/client"
@@ -77,7 +79,7 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 
 }
 
-func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, reply interface{}) error {
+func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, reply lcode.IMessage) error {
 	cli, err := xc.dial(rpcAddr)
 	if err != nil {
 		log.Errorf("xc call", "XClient.call rpcAddr:%s failed err:%v", rpcAddr, err)
@@ -97,7 +99,7 @@ func (xc *XClient) Observe(rpcAddr string, dur int64) {
 }
 
 // TODO server close retry
-func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply interface{}) error {
+func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply lcode.IMessage) error {
 	rpcAddr, err := xc.d.Get(sn, xc.mode)
 	if err != nil {
 		log.Errorf("", "XClient.Call Get service:%s mode:%d method:%s failed err:%v", sn, xc.mode, sm, err)
@@ -109,7 +111,7 @@ func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply interfac
 	return xc.call(rpcAddr, ctx, sm, args, reply)
 }
 
-func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply interface{}) error {
+func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply lcode.IMessage) error {
 	ss, err := xc.d.GetAll(sn)
 	if err != nil {
 		return err
@@ -129,10 +131,10 @@ func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply int
 		go func(rpcAddr string) {
 			defer wg.Done()
 			var (
-				clonedReply interface{}
+				clonedReply lcode.IMessage
 			)
 			if reply != nil {
-				clonedReply = reflect.New(reflect.ValueOf(reply).Elem().Type()).Interface()
+				clonedReply = reflect.New(reflect.ValueOf(reply).Elem().Type()).Interface().(lcode.IMessage)
 			}
 			err := xc.call(rpcAddr, ctx, sm, args, clonedReply)
 			mu.Lock()

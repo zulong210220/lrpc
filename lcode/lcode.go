@@ -11,8 +11,14 @@ type Header struct {
 type Codec interface {
 	io.Closer
 	Read(*Message) error
-	Write(*Header, interface{}) error
-	Decode([]byte, interface{}) error
+	Write(*Header, IMessage) error
+	Decode([]byte, IMessage) error
+}
+
+type IMessage interface {
+	Reset()
+	String() string
+	ProtoMessage()
 }
 
 // ---

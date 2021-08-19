@@ -57,13 +57,13 @@ func (gc *GobCodec) Read(msg *Message) error {
 	return err
 }
 
-func (gc *GobCodec) Decode(data []byte, body interface{}) error {
+func (gc *GobCodec) Decode(data []byte, body IMessage) error {
 	b := bytes.NewBuffer(data)
 	dec := gob.NewDecoder(b)
 	return dec.Decode(body)
 }
 
-func (gc *GobCodec) Write(h *Header, body interface{}) (err error) {
+func (gc *GobCodec) Write(h *Header, body IMessage) (err error) {
 	fun := "GobCodec.Write"
 	defer func() {
 		if err != nil {

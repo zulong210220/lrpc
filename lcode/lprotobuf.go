@@ -20,7 +20,7 @@ type GoProtoCodec struct {
 	conn io.ReadWriteCloser
 }
 
-func NewGoProtoCodec(conn io.ReadWriteCloser) *GoProtoCodec {
+func NewGoProtoCodec(conn io.ReadWriteCloser) Codec {
 	return &GoProtoCodec{
 		conn: conn,
 	}
@@ -59,11 +59,11 @@ func (jc *GoProtoCodec) Read(msg *Message) error {
 	return err
 }
 
-func (jc *GoProtoCodec) Decode(data []byte, body goproto.Message) error {
+func (jc *GoProtoCodec) Decode(data []byte, body IMessage) error {
 	return goproto.Unmarshal(data, body)
 }
 
-func (pc *GoProtoCodec) Write(h *Header, body goproto.Message) (err error) {
+func (pc *GoProtoCodec) Write(h *Header, body IMessage) (err error) {
 	fun := "GoProtoCodec.Write"
 	defer func() {
 		if err != nil {

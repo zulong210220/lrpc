@@ -65,11 +65,11 @@ func (jc *JsonCodec) Read(msg *Message) error {
 	return err
 }
 
-func (jc *JsonCodec) Decode(data []byte, body interface{}) error {
+func (jc *JsonCodec) Decode(data []byte, body IMessage) error {
 	return jsoniter.Unmarshal(data, body)
 }
 
-func (jc *JsonCodec) Write(h *Header, body interface{}) (err error) {
+func (jc *JsonCodec) Write(h *Header, body IMessage) (err error) {
 	fun := "JsonCodec.Write"
 	defer func() {
 		if err != nil {

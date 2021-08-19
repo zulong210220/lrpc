@@ -23,8 +23,8 @@ import (
 type Call struct {
 	Seq           uint64
 	ServiceMethod string
-	Args          interface{}
-	Reply         interface{}
+	Args          lcode.IMessage
+	Reply         lcode.IMessage
 	Error         error
 	Done          chan *Call
 }
@@ -249,7 +249,7 @@ func (c *Client) send(ca *Call) {
 	}
 }
 
-func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
+func (c *Client) Do(sm string, args, reply lcode.IMessage, done chan *Call) *Call {
 	fun := "Client.Do"
 	if done == nil {
 		done = make(chan *Call, 16)
@@ -267,7 +267,7 @@ func (c *Client) Do(sm string, args, reply interface{}, done chan *Call) *Call {
 	return ca
 }
 
-func (c *Client) Call(ctx context.Context, sm string, args, reply interface{}) error {
+func (c *Client) Call(ctx context.Context, sm string, args, reply lcode.IMessage) error {
 	// send to server
 	ca := c.Do(sm, args, reply, make(chan *Call, 1))
 

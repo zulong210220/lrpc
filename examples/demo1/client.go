@@ -8,9 +8,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zulong210220/lrpc/models"
+
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
-	"github.com/zulong210220/lrpc/rpc"
 	"github.com/zulong210220/lrpc/xclient"
 )
 
@@ -39,18 +40,19 @@ func main() {
 	//TODO 二次连接panic
 	time.Sleep(1000 * time.Millisecond)
 	now := time.Now()
-	for i := 1; i < 9999999; i++ {
-		var reply int
+	for i := 1; i < 99; i++ {
+		var reply models.Reply
 		var err error
 		ctx := context.Background()
 		//ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		err = xc.Call(ctx, sn, "Foo.Sum", &rpc.Args{Num1: i, Num2: i * i}, &reply)
+		err = xc.Call(ctx, sn, "Foo.Sum", &models.Args{Num1: i, Num2: i * i}, &reply)
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}
-		if reply != i+i*i {
-			log.Infof("", "Call [%d] reply:%d", i, reply)
-		}
+		//if reply.Num != i+i*i {
+		log.Infof("", "Call [%d] reply:%d", i, reply)
+		//}
+
 	}
 	log.Info("", "Call over...", time.Since(now))
 	fmt.Println("all over......", time.Since(now))
