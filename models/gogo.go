@@ -2,6 +2,7 @@ package models
 
 import (
 	proto "github.com/golang/protobuf/proto"
+	"sort"
 )
 
 type GogoProtoColorGroup struct {
@@ -34,5 +35,6 @@ func (g *Gogo) Demo(req GogoProtoColorGroup, resp *GogoProtoColorGroupRsp) error
 	}
 	resp.Id = new(int32)
 	*resp.Id = (*req.Id) / 3
+	sort.Strings(req.Colors)
 	return nil
 }
