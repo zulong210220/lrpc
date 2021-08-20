@@ -8,4 +8,7 @@ var (
 
 const (
 	HandleshakeBufLen = 256
+
+	BufferPoolSizeMin = 4
+	BufferPoolSizeMax = 32 * 1024
 )

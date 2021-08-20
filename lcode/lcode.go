@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"io"
 	"sync"
+
+	"github.com/zulong210220/lrpc/consts"
+	"github.com/zulong210220/lrpc/utils"
 )
 
 type Header struct {
@@ -40,6 +43,7 @@ const (
 
 var (
 	NewCodecFuncMap map[Type]NewCodecFunc
+	limitedPool     *utils.LimitedPool
 )
 
 func Init() {
@@ -48,6 +52,8 @@ func Init() {
 	NewCodecFuncMap[JsonType] = NewJsonCodec
 	NewCodecFuncMap[ProtoType] = NewProtoCodec
 	NewCodecFuncMap[GoProtoType] = NewGoProtoCodec
+
+	limitedPool = utils.NewLimitedPool(consts.BufferPoolSizeMin, consts.BufferPoolSizeMax)
 }
 
 var bufferPool = sync.Pool{

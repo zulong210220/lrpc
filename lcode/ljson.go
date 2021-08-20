@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"io"
 
+	"github.com/zulong210220/lrpc/consts"
+
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/zulong210220/lrpc/log"
@@ -49,7 +51,18 @@ func (jc *JsonCodec) Read(msg *Message) error {
 
 	total := binary.BigEndian.Uint32(data)
 
-	data = make([]byte, total)
+	if total > consts.BufferPoolSizeMax {
+		data = make([]byte, total)
+	} else {
+		bb := limitedPool.Get(int(total))
+		if len(*bb) > int(total) {
+			data = (*bb)[:int(total)]
+		} else {
+			data = *bb
+		}
+		defer limitedPool.Put(bb)
+	}
+
 	n, err = jc.conn.Read(data)
 	if err != nil {
 		log.Errorf("JCR", "%s connection data n:%d failed err:%v", fun, n, err)

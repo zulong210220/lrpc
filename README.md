@@ -16,3 +16,16 @@ fix
 ```
 ' {"MagicNumber":3927900,"CodecType":"application/json","ConnectTimeout":3000000000,"HandleTimeout":0}Foo.Sum{"Num1":2,"Num2":4} ' 146 <nil> 1024
 ```
+
+
+pool bench
+
+```
+https://github.com/Mnwa/GoBench
+```
+
+rpc bench
+
+```
+https://github.com/smallnest/gosercomp
+```
