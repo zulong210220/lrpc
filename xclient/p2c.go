@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// https://github.com/hnlq715/go-loadbalance
+
 type peakEwma struct {
 	stamp int64
 	value int64
