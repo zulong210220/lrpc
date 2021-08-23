@@ -239,6 +239,7 @@ func (c *Client) send(ca *Call) {
 	c.header.ServiceMethod = ca.ServiceMethod
 	c.header.Seq = seq
 	c.header.Error = ""
+	c.header.TraceId = ca.TraceId
 
 	err = c.cc.Write(&c.header, ca.Args)
 	if err != nil {
