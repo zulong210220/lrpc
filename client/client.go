@@ -2,7 +2,6 @@ package client
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/zulong210220/lrpc/consts"
+	"github.com/zulong210220/lrpc/context"
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/rpc"
@@ -23,6 +23,7 @@ import (
 type Call struct {
 	Seq           uint64
 	ServiceMethod string
+	TraceId       string
 	Args          lcode.IMessage
 	Reply         lcode.IMessage
 	Error         error
@@ -249,7 +250,7 @@ func (c *Client) send(ca *Call) {
 	}
 }
 
-func (c *Client) Do(sm string, args, reply lcode.IMessage, done chan *Call) *Call {
+func (c *Client) Do(traceId, sm string, args, reply lcode.IMessage, done chan *Call) *Call {
 	fun := "Client.Do"
 	if done == nil {
 		done = make(chan *Call, 16)
@@ -258,6 +259,7 @@ func (c *Client) Do(sm string, args, reply lcode.IMessage, done chan *Call) *Cal
 	}
 	ca := &Call{
 		ServiceMethod: sm,
+		TraceId:       traceId,
 		Args:          args,
 		Reply:         reply,
 		Done:          done,
@@ -267,9 +269,9 @@ func (c *Client) Do(sm string, args, reply lcode.IMessage, done chan *Call) *Cal
 	return ca
 }
 
-func (c *Client) Call(ctx context.Context, sm string, args, reply lcode.IMessage) error {
+func (c *Client) Call(ctx *context.Context, sm string, args, reply lcode.IMessage) error {
 	// send to server
-	ca := c.Do(sm, args, reply, make(chan *Call, 1))
+	ca := c.Do(context.GetTraceId(ctx), sm, args, reply, make(chan *Call, 1))
 
 	// wait receive done
 	// 可能存在server不响应的情况

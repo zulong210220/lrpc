@@ -12,6 +12,7 @@ import (
 type Header struct {
 	ServiceMethod string
 	Seq           uint64
+	TraceId       string
 	Error         string
 }
 

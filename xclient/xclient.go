@@ -8,7 +8,6 @@ package xclient
  * */
 
 import (
-	"context"
 	"io"
 	"reflect"
 	"sync"
@@ -19,6 +18,7 @@ import (
 	"github.com/zulong210220/lrpc/log"
 
 	"github.com/zulong210220/lrpc/client"
+	"github.com/zulong210220/lrpc/context"
 	"github.com/zulong210220/lrpc/rpc"
 )
 
@@ -79,7 +79,7 @@ func (xc *XClient) dial(rpcAddr string) (*client.Client, error) {
 
 }
 
-func (xc *XClient) call(rpcAddr string, ctx context.Context, sm string, args, reply lcode.IMessage) error {
+func (xc *XClient) call(rpcAddr string, ctx *context.Context, sm string, args, reply lcode.IMessage) error {
 	cli, err := xc.dial(rpcAddr)
 	if err != nil {
 		log.Errorf("xc call", "XClient.call rpcAddr:%s failed err:%v", rpcAddr, err)
@@ -99,7 +99,7 @@ func (xc *XClient) Observe(rpcAddr string, dur int64) {
 }
 
 // TODO server close retry
-func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply lcode.IMessage) error {
+func (xc *XClient) Call(ctx *context.Context, sn, sm string, args, reply lcode.IMessage) error {
 	rpcAddr, err := xc.d.Get(sn, xc.mode)
 	if err != nil {
 		log.Errorf("", "XClient.Call Get service:%s mode:%d method:%s failed err:%v", sn, xc.mode, sm, err)
@@ -111,7 +111,7 @@ func (xc *XClient) Call(ctx context.Context, sn, sm string, args, reply lcode.IM
 	return xc.call(rpcAddr, ctx, sm, args, reply)
 }
 
-func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply lcode.IMessage) error {
+func (xc *XClient) Broadcast(ctx *context.Context, sn, sm string, args, reply lcode.IMessage) error {
 	ss, err := xc.d.GetAll(sn)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply lco
 	)
 
 	replyDone := reply == nil
-	ctx, cancel := context.WithCancel(ctx)
+	//ctx, cancel := ctx.Context.WithCancel(ctx)
 
 	for _, rpcAddr := range ss {
 		wg.Add(1)
@@ -142,7 +142,7 @@ func (xc *XClient) Broadcast(ctx context.Context, sn, sm string, args, reply lco
 
 			if err != nil && e == nil {
 				e = err
-				cancel()
+				//cancel()
 			}
 			if err == nil && !replyDone {
 				reflect.ValueOf(reply).Elem().Set(reflect.ValueOf(clonedReply).Elem())

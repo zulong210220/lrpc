@@ -323,11 +323,12 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	if err != nil {
 		return nil, err
 	}
+	traceId := msg.H.TraceId
 
 	req := &request{h: msg.H}
 	req.svc, req.mType, err = s.findService(msg.H.ServiceMethod)
 	if err != nil {
-		log.Errorf("", "%s findService failed serviceMethod:%s err:%v", fun, msg.H.ServiceMethod, err)
+		log.Errorf(traceId, "%s findService failed serviceMethod:%s err:%v", fun, msg.H.ServiceMethod, err)
 		return req, err
 	}
 
@@ -342,19 +343,20 @@ func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
 	//err = cc.ReadBody(argvi)
 	err = cc.Decode(msg.B, argvi.(lcode.IMessage))
 	if err != nil {
-		log.Errorf("", "%s rpc server read argv failed err:%v", fun, err)
+		log.Errorf(traceId, "%s rpc server read argv failed err:%v", fun, err)
 	}
 	return req, err
 }
 
 func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body lcode.IMessage, sending *sync.Mutex) {
 	fun := "Server.sendResponse"
+	traceId := h.TraceId
 
 	sending.Lock()
 	defer sending.Unlock()
 	err := cc.Write(h, body)
 	if err != nil {
-		log.Errorf("", "%s rpc server write response failed error:%v", fun, err)
+		log.Errorf(traceId, "%s rpc server write response failed error:%v", fun, err)
 	}
 
 }

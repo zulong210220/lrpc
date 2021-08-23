@@ -1,17 +1,20 @@
 package main
 
 import (
-	"context"
+	gctx "context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/zulong210220/lrpc/utils"
+
 	"github.com/zulong210220/lrpc/rpc"
 
 	"github.com/zulong210220/lrpc/models"
 
+	"github.com/zulong210220/lrpc/context"
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/xclient"
@@ -53,8 +56,12 @@ func main() {
 	for i := 1; i < 9999; i++ {
 		var reply models.GogoProtoColorGroupRsp
 		var err error
-		ctx := context.Background()
+		//ctx := context.Background()
 		//ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+		traceId := utils.NewUUIDSimple()
+		ctx := context.NewContext(gctx.Background())
+		context.SetTraceId(ctx, traceId)
 
 		gogoProtobufGroup := models.GogoProtoColorGroup{
 			Id:     proto.Int32(int32(i)),
@@ -66,8 +73,11 @@ func main() {
 		if err != nil {
 			log.Errorf("", "Call:%d failed err:%v", i, err)
 		}
+		res := *reply.Id
 		//if reply.Num != i+i*i {
-		log.Infof("", "Call [%d] reply:%d", i, *reply.Id)
+		if res != int32(i) {
+			log.Infof(traceId, "Call [%d] reply:%d", i, res)
+		}
 		//}
 
 	}

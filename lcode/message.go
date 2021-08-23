@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/zulong210220/lrpc/consts"
+
 	"github.com/zulong210220/lrpc/log"
 )
 
@@ -34,6 +36,19 @@ func (m *Message) Pack() ([]byte, error) {
 	err = binary.Write(dataBuf, binary.BigEndian, m.H.Seq)
 	if err != nil {
 		log.Errorf("Message.Pack", " binary.Write seq failed err:%v", err)
+		return nil, err
+	}
+
+	n = uint32(len(m.H.TraceId))
+	err = binary.Write(dataBuf, binary.BigEndian, n)
+	if err != nil {
+		log.Errorf("Message.Pack", " binary.Write len TraceId failed err:%v", err)
+		return nil, err
+	}
+
+	err = binary.Write(dataBuf, binary.BigEndian, []byte(m.H.TraceId))
+	if err != nil {
+		log.Errorf("Message.Pack", " binary.Write TraceId failed err:%v", err)
 		return nil, err
 	}
 
@@ -99,6 +114,20 @@ func (m *Message) Unpack(data []byte) error {
 
 	err = binary.Read(dataBuf, binary.BigEndian, &n)
 	if err != nil {
+		log.Errorf("Message.Unpack", " binary.Read len TraceId failed err:%v", err)
+		return err
+	}
+
+	buf = make([]byte, n)
+	err = binary.Read(dataBuf, binary.BigEndian, &buf)
+	if err != nil {
+		log.Errorf("Message.Unpack", " binary.Read TraceId failed err:%v", err)
+		return err
+	}
+	m.H.TraceId = string(buf)
+
+	err = binary.Read(dataBuf, binary.BigEndian, &n)
+	if err != nil {
 		log.Errorf("Message.Unpack", " binary.Read len Error failed err:%v", err)
 		return err
 	}
@@ -119,7 +148,18 @@ func (m *Message) Unpack(data []byte) error {
 		return err
 	}
 
-	buf = make([]byte, n)
+	//buf = make([]byte, n)
+	if n > consts.BufferPoolSizeMax {
+		buf = make([]byte, n)
+	} else {
+		bb := limitedPool.Get(int(n))
+		if len(*bb) > int(n) {
+			buf = (*bb)[:int(n)]
+		} else {
+			buf = *bb
+		}
+		defer limitedPool.Put(bb)
+	}
 	err = binary.Read(dataBuf, binary.BigEndian, &buf)
 	if err != nil {
 		log.Errorf("Message.Unpack", " binary.Read Body failed err:%v", err)
