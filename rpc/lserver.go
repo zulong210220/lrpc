@@ -13,13 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zulong210220/lrpc/utils"
-
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/lcode"
 	"github.com/zulong210220/lrpc/log"
+	"github.com/zulong210220/lrpc/utils"
 )
 
 const (
@@ -80,10 +79,7 @@ func (s *Server) Init(c *Config) {
 		log.Errorf("%s err:%v", fun, err)
 		return
 	}
-	s.ln, _ = net.Listen("tcp", ":0")
 
-	lip, _ := utils.ExternalIP()
-	s.endpoint = lip.String() + ":" + s.getListenPort()
 	s.stop = make(chan error)
 }
 
@@ -107,6 +103,10 @@ func (s *Server) getEtcdValue() string {
 func (s *Server) registryEtcd() error {
 	fun := "Server.registryEtcd"
 	ctx := context.Background()
+	// wait endpoint not null
+	for s.endpoint == "" {
+
+	}
 	key := s.getEtcdKey()
 	value := s.getEtcdValue()
 
@@ -161,8 +161,14 @@ var DefaultServer = NewServer()
 
 func (s *Server) Accept(ln net.Listener) {
 	fun := "Server.Accept"
+
+	s.ln, _ = net.Listen("tcp", ":0")
+	lip, _ := utils.ExternalIP()
+	s.endpoint = lip.String() + ":" + s.getListenPort()
+	fmt.Println(s.endpoint)
+
 	for {
-		conn, err := ln.Accept()
+		conn, err := s.ln.Accept()
 		fmt.Println("Accept", conn.LocalAddr(), conn.LocalAddr())
 		if err != nil {
 			log.Errorf("", "%s rpc server accept failed err:%v", fun, err)
