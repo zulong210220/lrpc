@@ -162,7 +162,12 @@ var DefaultServer = NewServer()
 func (s *Server) Accept(ln net.Listener) {
 	fun := "Server.Accept"
 
-	s.ln, _ = net.Listen("tcp", ":0")
+	if ln != nil {
+		s.ln = ln
+	} else {
+		s.ln, _ = net.Listen("tcp", ":0")
+	}
+
 	lip, _ := utils.ExternalIP()
 	s.endpoint = lip.String() + ":" + s.getListenPort()
 	fmt.Println(s.endpoint)
@@ -202,7 +207,7 @@ func (s *Server) selectLoop() {
 
 func (s *Server) Run() {
 	go s.registryEtcd()
-	s.Accept(s.ln)
+	s.Accept(nil)
 }
 
 func Accept(ln net.Listener) {
