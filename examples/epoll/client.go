@@ -42,7 +42,11 @@ func main() {
 		for i := 0; i < len(conns); i++ {
 			time.Sleep(tts)
 			conn := conns[i]
-			conn.Write([]byte("hello world\r\n"))
+			n, err := conn.Write([]byte("hello world\r\n"))
+			if err != nil {
+				fmt.Println("Write", n, err)
+				return
+			}
 		}
 	}
 }

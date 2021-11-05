@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -95,7 +96,7 @@ func socketFD(conn net.Conn) int {
 }
 
 func main() {
-	setLimit()
+	//setLimit()
 	ln, err := net.Listen("tcp", ":8972")
 	if err != nil {
 		panic(err)
@@ -112,6 +113,7 @@ func main() {
 	go start()
 	for {
 		conn, e := ln.Accept()
+		fmt.Println("conn", conn, e)
 		if e != nil {
 			if ne, ok := e.(net.Error); ok && ne.Temporary() {
 				log.Printf("accept temp err: %v", ne)

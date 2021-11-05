@@ -118,7 +118,7 @@ func (jc *JsonCodec) Write(h *Header, body IMessage) (err error) {
 	}
 
 	tbs := dataBuf.Bytes()
-	PutBuffer(buffer)
+	PutBuffer(dataBuf)
 
 	n, err = jc.conn.Write(tbs)
 	if err != nil {
