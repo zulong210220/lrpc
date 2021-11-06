@@ -92,6 +92,7 @@ func (eventLoop *EventLoop) Handle(handler Handler) {
 				if err != nil || socketEventRegistered == -1 {
 					continue
 				}
+
 			} else if currentEvent.Filter&syscall.EVFILT_READ != 0 {
 				// data available -> forward to handler
 				handler(&socket.Socket{
