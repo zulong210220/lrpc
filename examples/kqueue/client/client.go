@@ -6,15 +6,48 @@ package main
  * */
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"time"
 
-	"github.com/zulong210220/lrpc/consts"
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/rpc"
 )
+
+func PackHeader() []byte {
+	fun := "PH"
+	dataBuf := bytes.NewBuffer([]byte{})
+	var err error
+
+	err = jsoniter.NewEncoder(dataBuf).Encode(rpc.DefaultOption)
+	if err != nil {
+		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
+		return nil
+	}
+
+	pkg := dataBuf.Bytes()
+
+	dataBuf = bytes.NewBuffer([]byte{})
+
+	n := uint16(len(pkg))
+	err = binary.Write(dataBuf, binary.BigEndian, n)
+	if err != nil {
+		log.Errorf("PackHeader", " binary.Write len Option failed err:%v", err)
+		return nil
+	}
+
+	err = binary.Write(dataBuf, binary.BigEndian, pkg)
+	if err != nil {
+		log.Errorf("PackHeader", " binary.Write Option failed err:%v", err)
+		return nil
+	}
+
+	return dataBuf.Bytes()
+}
 
 func main() {
 	fmt.Println("vim-go")
@@ -30,21 +63,17 @@ func main() {
 
 	defer func() {
 		if err != nil {
-			_ = conn.Close()
 		}
+		_ = conn.Close()
 	}()
 
-	data, err := json.Marshal(rpc.DefaultOption)
-	if err != nil {
-		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
-		_ = conn.Close()
+	var n int
+	pkg := PackHeader()
+	if len(pkg) == 0 {
+		fmt.Println("PH failed")
 		return
 	}
-
-	buf := make([]byte, consts.HandleshakeBufLen)
-	var n int
-	copy(buf, data)
-	n, err = conn.Write(buf)
+	n, err = conn.Write(pkg)
 	if err != nil {
 		log.Errorf("", "%s rpc client options failed write n:%d err:%v", fun, n, err)
 		_ = conn.Close()
@@ -55,7 +84,6 @@ func main() {
 		buf := []byte(fmt.Sprintf("ping%d\n", i))
 		conn.Write(buf)
 	}
-
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

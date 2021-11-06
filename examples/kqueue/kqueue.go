@@ -2,13 +2,13 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"syscall"
 
-	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/log"
 	"github.com/zulong210220/lrpc/rpc"
 
@@ -45,29 +45,24 @@ func main() {
 		var opt rpc.Option
 		//data, err := ioutil.ReadAll(conn)
 
-		var data = make([]byte, consts.HandleshakeBufLen)
+		var data = make([]byte, 2)
 		numBytesRead, err := syscall.Read(s.FileDescriptor, data)
 		if err != nil {
 			numBytesRead = 0
+			fmt.Println("Syscall read failed err", err)
 			return
 		}
-		fmt.Println("Accept", numBytesRead)
 
-		fun := "Accept"
+		total := binary.BigEndian.Uint16(data)
+		data = make([]byte, total)
+		_, err = syscall.Read(s.FileDescriptor, data)
 		if err != nil {
-			log.Errorf("", "%s ioutil.ReadAll options error:%v", fun, err)
+			fmt.Println("Syscall read failed err", err)
 			return
 		}
-		//err := json.NewDecoder(conn).Decode(&opt)
-		n := 0
-		for n < len(data) {
-			if data[n] == '}' {
-				break
-			}
-			n++
-		}
-		data = data[:n+1]
 
+		fmt.Println("Accept", total, numBytesRead)
+		fun := "Accept"
 		err = json.Unmarshal(data, &opt)
 		if err != nil {
 			log.Errorf("", "%s rpc server options error:%v", fun, err)
@@ -84,6 +79,7 @@ func main() {
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil || strings.TrimSpace(line) == "" {
+				fmt.Println("ERR", err)
 				break
 			}
 			fmt.Println(line)

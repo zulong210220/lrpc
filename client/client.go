@@ -2,7 +2,8 @@ package client
 
 import (
 	"bufio"
-	"encoding/json"
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/zulong210220/lrpc/consts"
 	"github.com/zulong210220/lrpc/context"
@@ -160,17 +163,31 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 	}
 
 	//err := json.NewEncoder(conn).Encode(opt)
-	data, err := json.Marshal(opt)
+	var err error
+	dataBuf := bytes.NewBuffer([]byte{})
+	err = jsoniter.NewEncoder(dataBuf).Encode(opt)
 	if err != nil {
 		log.Errorf("", "%s rpc client options failed err:%v", fun, err)
+		return nil, err
+	}
+	pkg := dataBuf.Bytes()
+
+	dataBuf = bytes.NewBuffer([]byte{})
+	n := uint16(len(pkg))
+	err = binary.Write(dataBuf, binary.BigEndian, n)
+	if err != nil {
+		log.Errorf("", " binary.Write len Option failed err:%v", err)
+		return nil, err
+	}
+
+	_, err = conn.Write(dataBuf.Bytes())
+	if err != nil {
+		log.Errorf("", "%s rpc client options failed write n:%d err:%v", fun, n, err)
 		_ = conn.Close()
 		return nil, err
 	}
 
-	buf := make([]byte, consts.HandleshakeBufLen)
-	var n int
-	copy(buf, data)
-	n, err = conn.Write(buf)
+	_, err = conn.Write(pkg)
 	if err != nil {
 		log.Errorf("", "%s rpc client options failed write n:%d err:%v", fun, n, err)
 		_ = conn.Close()

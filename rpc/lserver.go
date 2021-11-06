@@ -2,7 +2,7 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -222,37 +224,10 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 			log.Errorf("Close", "Server.ServeConn Close failed err:%v", err)
 		}
 	}()
-	var opt Option
 	//data, err := ioutil.ReadAll(conn)
 
-	var data = make([]byte, consts.HandleshakeBufLen)
-	n, err := conn.Read(data)
-
-	// also block
-	// var buf bytes.Buffer
-	// nn, err := io.Copy(&buf, conn)
+	opt, err := s.preHandle(conn)
 	if err != nil {
-		log.Errorf("", "%s ioutil.ReadAll options error:%v", fun, err)
-		return
-	}
-	//err := json.NewDecoder(conn).Decode(&opt)
-	n = 0
-	for n < len(data) {
-		if data[n] == '}' {
-			break
-		}
-		n++
-	}
-	data = data[:n+1]
-
-	err = json.Unmarshal(data, &opt)
-	if err != nil {
-		log.Errorf("", "%s rpc server options error:%v", fun, err)
-		return
-	}
-
-	if opt.MagicNumber != MagicNumber {
-		log.Errorf("", "%s rpc server invalid magic number %x", fun, opt.MagicNumber)
 		return
 	}
 
@@ -261,8 +236,45 @@ func (s *Server) ServeConn(conn io.ReadWriteCloser) {
 		log.Errorf("", "%s rpc server invalid codec type %s", fun, opt.CodecType)
 		return
 	}
+	s.serveCodec(f(conn), opt)
+}
 
-	s.serveCodec(f(conn), &opt)
+func (s *Server) preHandle(conn io.ReadWriteCloser) (*Option, error) {
+	fun := "Server.preHandle"
+	var data = make([]byte, 2)
+	n, err := conn.Read(data)
+	if err != nil {
+		log.Errorf("", "%s rpc server read failed %v", fun, err)
+		return nil, err
+	}
+
+	total := binary.BigEndian.Uint16(data)
+	data = make([]byte, total)
+	n, err = conn.Read(data)
+	if err != nil {
+		log.Errorf("", "%s rpc server read failed %v", fun, err)
+		return nil, err
+	}
+
+	if uint16(n) != total {
+		log.Warningf("ne", "%s rpc server read n:%d total:%d", fun, n, total)
+	}
+
+	opt := &Option{}
+	err = jsoniter.Unmarshal(data, opt)
+	if err != nil {
+		log.Errorf("UnpackHeader", " Unmarshal Option failed err:%v", err)
+		return nil, err
+	}
+
+	// also block
+
+	if opt.MagicNumber != MagicNumber {
+		log.Errorf("", "%s rpc server invalid magic number %x", fun, opt.MagicNumber)
+		return nil, errors.New("Invalid MagicNumber")
+	}
+
+	return opt, err
 }
 
 type (
