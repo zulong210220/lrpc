@@ -182,7 +182,9 @@ func (s *Server) Accept(ln net.Listener) {
 			return
 		}
 
-		go s.ServeConn(conn)
+		//go s.ServeConn(conn)
+		c := NewConn(s, conn)
+		go c.Serve()
 	}
 }
 
@@ -321,6 +323,15 @@ func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
 		wg.Wait()
 	}
 }
+
+/*
+	Conn {
+	conn
+	chan
+	}
+*/
+
+// chan conn req->handle->resp
 
 type request struct {
 	h            *lcode.Header
