@@ -28,7 +28,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = io.WriteString(conn, "HTTP/1.0 "+consts.Connected+"\n\n")
-	s.ServeConn(conn)
+	c := NewConn(s, conn)
+	c.Serve()
 }
 
 func (s *Server) HandleHTTP() {

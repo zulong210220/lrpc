@@ -21,6 +21,15 @@ import (
 	"github.com/zulong210220/lrpc/utils"
 )
 
+/*
+	Conn {
+	conn
+	chan
+	}
+*/
+
+// chan conn req->handle->resp
+
 type Conn struct {
 	s        *Server
 	conn     net.Conn
@@ -72,7 +81,7 @@ func (c *Conn) Serve() {
 	}
 
 	f := lcode.NewCodecFuncMap[c.opt.CodecType]
-	if f == nil {
+	if f == false {
 		log.Errorf("", "%s rpc server invalid codec type %s", fun, c.opt.CodecType)
 		return
 	}
@@ -151,7 +160,7 @@ func (c *Conn) Read(msg *lcode.Message) error {
 	var data = make([]byte, 4)
 	n, err := c.conn.Read(data)
 	if err != nil {
-		log.Errorf("JCR", "%s connection total n:%d failed err:%v", fun, n, err)
+		log.Errorf("CR", "%s connection total n:%d failed err:%v", fun, n, err)
 		if err == io.EOF {
 			// TODO
 			return err
@@ -311,7 +320,7 @@ func (c *Conn) Encode(body interface{}) []byte {
 	}
 
 	if err != nil {
-		log.Errorf("JEM", "%s rpc codec: json Marshal failed error :%v", fun, err)
+		log.Errorf("CE", "%s rpc codec: json Marshal failed error :%v", fun, err)
 		return nil
 	}
 	return bs

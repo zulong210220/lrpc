@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	goproto "github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+	"github.com/zulong210220/lrpc/utils"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -38,7 +43,7 @@ func (c *Call) done() {
 }
 
 type Client struct {
-	cc      lcode.Codec
+	cc      net.Conn
 	opt     *rpc.Option
 	sending sync.Mutex
 	header  lcode.Header
@@ -57,6 +62,26 @@ var (
 const (
 	StatusClosing = 1
 )
+
+var (
+	limitedPool = utils.NewLimitedPool(consts.BufferPoolSizeMin, consts.BufferPoolSizeMax)
+
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	}
+)
+
+func GetBuffer() *bytes.Buffer {
+	buffer := bufferPool.Get().(*bytes.Buffer)
+	return buffer
+}
+
+func PutBuffer(buffer *bytes.Buffer) {
+	buffer.Reset()
+	bufferPool.Put(buffer)
+}
 
 func (c *Client) Close() error {
 	//c.mu.Lock()
@@ -117,6 +142,60 @@ func (c *Client) terminateCalls(err error) {
 	}
 }
 
+func (c *Client) Read(msg *lcode.Message) error {
+	fun := "Client.Read"
+	var data = make([]byte, 4)
+	n, err := c.cc.Read(data)
+	if err != nil {
+		log.Errorf("CR", "%s connection total n:%d failed err:%v", fun, n, err)
+		if err == io.EOF {
+			// TODO
+			return err
+		}
+		return err
+	}
+
+	total := binary.BigEndian.Uint32(data)
+
+	if total > consts.BufferPoolSizeMax {
+		data = make([]byte, total)
+	} else {
+		bb := limitedPool.Get(int(total))
+		if len(*bb) > int(total) {
+			data = (*bb)[:int(total)]
+		} else {
+			data = *bb
+		}
+		defer limitedPool.Put(bb)
+	}
+
+	n, err = c.cc.Read(data)
+	if err != nil {
+		log.Errorf("JCR", "%s connection data n:%d failed err:%v", fun, n, err)
+		if err == io.EOF {
+			// TODO
+			return err
+		}
+	}
+
+	err = msg.Unpack(data)
+	return err
+}
+
+func (c *Client) Decode(b []byte, argvi interface{}) error {
+	switch c.opt.CodecType {
+	case lcode.GobType:
+		return gob.NewDecoder(bytes.NewBuffer(b)).Decode(argvi)
+	case lcode.JsonType:
+		return jsoniter.Unmarshal(b, argvi)
+	case lcode.ProtoType:
+		proto.Unmarshal(b, argvi.(lcode.IMessage))
+	case lcode.GoProtoType:
+		return goproto.Unmarshal(b, argvi.(lcode.IMessage))
+	}
+	return nil
+}
+
 func (c *Client) receive() {
 	var (
 		err error
@@ -124,7 +203,7 @@ func (c *Client) receive() {
 	)
 	for err == nil {
 		msg := &lcode.Message{H: &lcode.Header{}}
-		err = c.cc.Read(msg)
+		err = c.Read(msg)
 		// TODO conn关闭会报错
 		if err != nil {
 			log.Errorf("", "%s ReadHeader failed err:%v", fun, err)
@@ -141,7 +220,7 @@ func (c *Client) receive() {
 			ca.done()
 		default:
 			//err = c.cc.ReadBody(ca.Reply)
-			err = c.cc.Decode(msg.B, ca.Reply)
+			err = c.Decode(msg.B, ca.Reply)
 			if err != nil {
 				ca.Error = fmt.Errorf("%s reading body err:%v", fun, err)
 			}
@@ -156,7 +235,7 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 	fun := "NewClient"
 	f := lcode.NewCodecFuncMap[opt.CodecType]
 
-	if f == nil {
+	if f == false {
 		err := fmt.Errorf("%s invalid codec type %s", fun, opt.CodecType)
 		log.Errorf("", "%s rpc client codec err:%v", fun, err)
 		return nil, err
@@ -194,10 +273,10 @@ func NewClient(conn net.Conn, opt *rpc.Option) (*Client, error) {
 		return nil, err
 	}
 
-	return newClientCodec(f(conn), opt), nil
+	return newClientCodec(conn, opt), nil
 }
 
-func newClientCodec(cc lcode.Codec, opt *rpc.Option) *Client {
+func newClientCodec(cc net.Conn, opt *rpc.Option) *Client {
 	c := &Client{
 		seq:     1,
 		cc:      cc,
@@ -233,6 +312,84 @@ func Dial(network, addr string, opts ...*rpc.Option) (c *Client, err error) {
 	return dialTimeout(NewClient, network, addr, opts...)
 }
 
+func (c *Client) Encode(body interface{}) []byte {
+	fun := "Client.Encode"
+	// TODO case type
+
+	var (
+		err    error
+		bs     []byte
+		buffer *bytes.Buffer
+	)
+	switch c.opt.CodecType {
+	case lcode.GobType:
+		buffer = GetBuffer()
+		err = gob.NewEncoder(buffer).Encode(body)
+		bs = buffer.Bytes()
+	case lcode.JsonType:
+		buffer = GetBuffer()
+		err = jsoniter.NewEncoder(buffer).Encode(body)
+		bs = buffer.Bytes()
+	case lcode.ProtoType:
+		bs, err = proto.Marshal(body.(lcode.IMessage))
+	case lcode.GoProtoType:
+		bs, err = goproto.Marshal(body.(lcode.IMessage))
+	}
+	if buffer != nil {
+		PutBuffer(buffer)
+	}
+
+	if err != nil {
+		log.Errorf("CE", "%s rpc codec: json Marshal failed error :%v", fun, err)
+		return nil
+	}
+	return bs
+}
+
+func (c *Client) Write(h *lcode.Header, body interface{}) (err error) {
+	fun := "Conn.Write"
+	defer func() {
+		if err != nil {
+			_ = c.cc.Close()
+		}
+	}()
+
+	bs := c.Encode(body)
+
+	var n int
+	msg := &lcode.Message{}
+	msg.H = h
+	msg.B = bs
+
+	bs, err = msg.Pack()
+	if err != nil {
+		return
+	}
+
+	dataBuf := GetBuffer()
+	err = binary.Write(dataBuf, binary.BigEndian, uint32(len(bs)))
+	if err != nil {
+		log.Errorf("CW", "%s binary Write len buffer:%v", fun, err)
+		return
+	}
+
+	tbs := dataBuf.Bytes()
+	PutBuffer(dataBuf)
+
+	n, err = c.cc.Write(tbs)
+	if err != nil {
+		log.Errorf("CW", "%s rpc codec: json error write : %d total :%v", fun, n, err)
+		return
+	}
+
+	n, err = c.cc.Write(bs)
+	if err != nil {
+		log.Errorf("CW", "%s rpc codec: json error write : %d buffer :%v", fun, n, err)
+	}
+
+	return
+}
+
 func (c *Client) send(ca *Call) {
 	if c == nil {
 		if ca != nil {
@@ -258,7 +415,7 @@ func (c *Client) send(ca *Call) {
 	c.header.Error = ""
 	c.header.TraceId = ca.TraceId
 
-	err = c.cc.Write(&c.header, ca.Args)
+	err = c.Write(&c.header, ca.Args)
 	if err != nil {
 		ca := c.removeCall(seq)
 		if ca != nil {

@@ -2,18 +2,14 @@ package rpc
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	jsoniter "github.com/json-iterator/go"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -218,67 +214,6 @@ func Accept(ln net.Listener) {
 	DefaultServer.Accept(ln)
 }
 
-func (s *Server) ServeConn(conn io.ReadWriteCloser) {
-	fun := "Server.ServeConn"
-	defer func() {
-		err := conn.Close()
-		if err != nil {
-			log.Errorf("Close", "Server.ServeConn Close failed err:%v", err)
-		}
-	}()
-	//data, err := ioutil.ReadAll(conn)
-
-	opt, err := s.preHandle(conn)
-	if err != nil {
-		return
-	}
-
-	f := lcode.NewCodecFuncMap[opt.CodecType]
-	if f == nil {
-		log.Errorf("", "%s rpc server invalid codec type %s", fun, opt.CodecType)
-		return
-	}
-	s.serveCodec(f(conn), opt)
-}
-
-func (s *Server) preHandle(conn io.ReadWriteCloser) (*Option, error) {
-	fun := "Server.preHandle"
-	var data = make([]byte, 2)
-	n, err := conn.Read(data)
-	if err != nil {
-		log.Errorf("", "%s rpc server read failed %v", fun, err)
-		return nil, err
-	}
-
-	total := binary.BigEndian.Uint16(data)
-	data = make([]byte, total)
-	n, err = conn.Read(data)
-	if err != nil {
-		log.Errorf("", "%s rpc server read failed %v", fun, err)
-		return nil, err
-	}
-
-	if uint16(n) != total {
-		log.Warningf("ne", "%s rpc server read n:%d total:%d", fun, n, total)
-	}
-
-	opt := &Option{}
-	err = jsoniter.Unmarshal(data, opt)
-	if err != nil {
-		log.Errorf("UnpackHeader", " Unmarshal Option failed err:%v", err)
-		return nil, err
-	}
-
-	// also block
-
-	if opt.MagicNumber != MagicNumber {
-		log.Errorf("", "%s rpc server invalid magic number %x", fun, opt.MagicNumber)
-		return nil, errors.New("Invalid MagicNumber")
-	}
-
-	return opt, err
-}
-
 type (
 	InvalidRequest struct{}
 )
@@ -297,42 +232,6 @@ var (
 	invalidRequest = &InvalidRequest{}
 )
 
-func (s *Server) serveCodec(cc lcode.Codec, opt *Option) {
-	//fun := "Server.serveCodec"
-	sending := &sync.Mutex{}
-	wg := &sync.WaitGroup{}
-
-	for {
-		// wait 偶尔阻塞在此
-		req, err := s.readRequest(cc)
-		if err != nil {
-			if req == nil {
-				wg = nil
-				break
-			}
-
-			req.h.Error = err.Error()
-			s.sendResponse(cc, req.h, invalidRequest, sending)
-			continue
-		}
-
-		wg.Add(1)
-		go s.handleRequest(cc, req, sending, wg, opt.HandleTimeout)
-	}
-	if wg != nil {
-		wg.Wait()
-	}
-}
-
-/*
-	Conn {
-	conn
-	chan
-	}
-*/
-
-// chan conn req->handle->resp
-
 type request struct {
 	h            *lcode.Header
 	argv, replyv reflect.Value
@@ -347,89 +246,6 @@ func (r *request) Header() *lcode.Header {
 		Error:         r.h.Error,
 	}
 	return h
-}
-
-func (s *Server) readRequest(cc lcode.Codec) (*request, error) {
-	fun := "Server.readRequest"
-
-	msg := &lcode.Message{H: &lcode.Header{}}
-	err := cc.Read(msg)
-	if err != nil {
-		return nil, err
-	}
-	traceId := msg.H.TraceId
-
-	req := &request{h: msg.H}
-	req.svc, req.mType, err = s.findService(msg.H.ServiceMethod)
-	if err != nil {
-		log.Errorf(traceId, "%s findService failed serviceMethod:%s err:%v", fun, msg.H.ServiceMethod, err)
-		return req, err
-	}
-
-	// TODO
-	req.argv = req.mType.newArgv()
-	req.replyv = req.mType.newReplyv()
-	argvi := req.argv.Interface()
-	if req.argv.Type().Kind() != reflect.Ptr {
-		argvi = req.argv.Addr().Interface()
-	}
-
-	//err = cc.ReadBody(argvi)
-	err = cc.Decode(msg.B, argvi.(lcode.IMessage))
-	if err != nil {
-		log.Errorf(traceId, "%s rpc server read argv failed err:%v", fun, err)
-	}
-	return req, err
-}
-
-func (s *Server) sendResponse(cc lcode.Codec, h *lcode.Header, body lcode.IMessage, sending *sync.Mutex) {
-	fun := "Server.sendResponse"
-	traceId := h.TraceId
-
-	sending.Lock()
-	defer sending.Unlock()
-	err := cc.Write(h, body)
-	if err != nil {
-		log.Errorf(traceId, "%s rpc server write response failed error:%v", fun, err)
-	}
-
-}
-
-func (s *Server) handleRequest(cc lcode.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, timeout time.Duration) {
-	//fun := "Server.handleRequest"
-	defer wg.Done()
-
-	called := make(chan struct{})
-	send := make(chan struct{})
-
-	go func() {
-		// 此处真正执行代码逻辑
-		err := req.svc.call(req.mType, req.argv, req.replyv)
-		called <- struct{}{}
-		if err != nil {
-			req.h.Error = err.Error()
-			s.sendResponse(cc, req.h, invalidRequest, sending)
-			send <- struct{}{}
-			return
-		}
-
-		s.sendResponse(cc, req.h, req.replyv.Interface().(lcode.IMessage), sending)
-		send <- struct{}{}
-	}()
-
-	if timeout == 0 {
-		<-called
-		<-send
-		return
-	}
-
-	select {
-	case <-time.After(timeout):
-		req.h.Error = fmt.Sprintf("rpc server: request handle timeout %s", timeout)
-		s.sendResponse(cc, req.h, req.replyv.Interface().(lcode.IMessage), sending)
-	case <-called:
-		<-send
-	}
 }
 
 func (s *Server) Register(rcvr interface{}) error {

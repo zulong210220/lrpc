@@ -2,7 +2,6 @@ package lcode
 
 import (
 	"bytes"
-	"io"
 	"sync"
 
 	"github.com/zulong210220/lrpc/consts"
@@ -16,12 +15,6 @@ type Header struct {
 	Error         string
 }
 
-type Codec interface {
-	io.Closer
-	Read(*Message) error
-	Write(*Header, IMessage) error
-	Decode([]byte, IMessage) error
-}
 
 type IMessage interface {
 	Reset()
@@ -31,7 +24,6 @@ type IMessage interface {
 
 // ---
 
-type NewCodecFunc func(io.ReadWriteCloser) Codec
 
 type Type string
 
@@ -43,16 +35,16 @@ const (
 )
 
 var (
-	NewCodecFuncMap map[Type]NewCodecFunc
+	NewCodecFuncMap map[Type]bool
 	limitedPool     *utils.LimitedPool
 )
 
 func Init() {
-	NewCodecFuncMap = make(map[Type]NewCodecFunc)
-	NewCodecFuncMap[GobType] = NewGobCodec
-	NewCodecFuncMap[JsonType] = NewJsonCodec
-	NewCodecFuncMap[ProtoType] = NewProtoCodec
-	NewCodecFuncMap[GoProtoType] = NewGoProtoCodec
+	NewCodecFuncMap = make(map[Type]bool)
+	NewCodecFuncMap[GobType] = true
+	NewCodecFuncMap[JsonType] = true
+	NewCodecFuncMap[ProtoType] = true
+	NewCodecFuncMap[GoProtoType] = true
 
 	limitedPool = utils.NewLimitedPool(consts.BufferPoolSizeMin, consts.BufferPoolSizeMax)
 }
