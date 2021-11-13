@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,40 +211,6 @@ func (s *Server) Run() {
 
 func Accept(ln net.Listener) {
 	DefaultServer.Accept(ln)
-}
-
-type (
-	InvalidRequest struct{}
-)
-
-func (ir *InvalidRequest) Reset() {
-
-}
-func (ir *InvalidRequest) String() string {
-	return "invalid request"
-}
-func (ir *InvalidRequest) ProtoMessage() {
-
-}
-
-var (
-	invalidRequest = &InvalidRequest{}
-)
-
-type request struct {
-	h            *lcode.Header
-	argv, replyv reflect.Value
-	mType        *methodType
-	svc          *service
-}
-
-func (r *request) Header() *lcode.Header {
-	h := &lcode.Header{
-		ServiceMethod: r.h.ServiceMethod,
-		Seq:           r.h.Seq,
-		Error:         r.h.Error,
-	}
-	return h
 }
 
 func (s *Server) Register(rcvr interface{}) error {

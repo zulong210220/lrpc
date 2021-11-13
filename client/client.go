@@ -416,6 +416,7 @@ func (c *Client) send(ca *Call) {
 	c.header.TraceId = ca.TraceId
 
 	err = c.Write(&c.header, ca.Args)
+	//fmt.Println("aaa", c.header, ca.Args, err)
 	if err != nil {
 		ca := c.removeCall(seq)
 		if ca != nil {

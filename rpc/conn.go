@@ -10,6 +10,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	goproto "github.com/gogo/protobuf/proto"
@@ -31,17 +32,36 @@ import (
 // chan conn req->handle->resp
 
 type Conn struct {
-	s        *Server
-	conn     net.Conn
-	opt      *Option
-	reqChan  chan *request
-	respChan chan bool
+	state     int32
+	fd        int
+	workerNum int
+	s         *Server
+	conn      net.Conn
+	opt       *Option
+	reqChan   chan *request
+	respChan  chan *response
+	closeChan chan bool
+	die       chan struct{}
 }
+
+const (
+	DefaultHandlerNumber = 4
+
+	StateRunninng = 1
+	StateClosed   = 2
+)
 
 func NewConn(s *Server, conn net.Conn) *Conn {
 	return &Conn{
-		s:    s,
-		conn: conn,
+		state:     StateRunninng,
+		fd:        socketFD(conn),
+		workerNum: DefaultHandlerNumber,
+		s:         s,
+		conn:      conn,
+		reqChan:   make(chan *request, 64),
+		respChan:  make(chan *response, 64),
+		closeChan: make(chan bool, 64),
+		die:       make(chan struct{}),
 	}
 }
 
@@ -67,12 +87,12 @@ func PutBuffer(buffer *bytes.Buffer) {
 
 func (c *Conn) Serve() {
 	fun := "Conn.Serve"
-	defer func() {
-		err := c.conn.Close()
-		if err != nil {
-			log.Errorf("Close", "Server.ServeConn Close failed err:%v", err)
-		}
-	}()
+	//defer func() {
+	//	err := c.conn.Close()
+	//	if err != nil {
+	//		log.Errorf("Close", "Server.ServeConn Close failed err:%v", err)
+	//	}
+	//}()
 	//data, err := ioutil.ReadAll(conn)
 
 	err := c.preHandle()
@@ -85,7 +105,10 @@ func (c *Conn) Serve() {
 		log.Errorf("", "%s rpc server invalid codec type %s", fun, c.opt.CodecType)
 		return
 	}
+	c.startWorkers()
+	go c.close()
 	c.serveCodec()
+
 }
 
 func (c *Conn) preHandle() error {
@@ -123,12 +146,152 @@ func (c *Conn) preHandle() error {
 		return errors.New("Invalid MagicNumber")
 	}
 
+	if opt.HandleTimeout == 0 {
+		opt.HandleTimeout = 3 * time.Second
+	}
+
 	c.opt = opt
 
 	return err
 }
 
+// producer
 func (c *Conn) serveCodec() {
+	//fun := "Server.serveCodec"
+	for {
+		select {
+		case <-c.closeChan:
+			return
+		default:
+			// wait 偶尔阻塞在此
+			req, err := c.readRequest()
+			if err != nil {
+				// close conn
+				c.Close()
+				return
+				//req.h.Error = err.Error()
+				////c.sendResponse(req.h, invalidRequest, sending)
+				//resp := &response{
+				//	h:    req.h,
+				//	body: invalidRequest,
+				//}
+				//c.respChan <- resp
+				//continue
+			}
+			c.reqChan <- req
+			//go c.handleRequest(req, sending, wg, c.opt.HandleTimeout)
+		}
+	}
+}
+
+func (c *Conn) startWorkers() {
+	for i := 0; i < c.workerNum; i++ {
+		go c.loopHandleRequest(i + 1)
+	}
+	go c.handleResponse()
+}
+
+// comsumer
+func (c *Conn) loopHandleRequest(i int) {
+	for {
+		select {
+		case <-c.closeChan:
+			return
+		case req := <-c.reqChan:
+			if req == nil {
+				return
+			}
+			c.handleSingleRequest(req)
+		}
+	}
+}
+
+func (c *Conn) handleSingleRequest(req *request) {
+	called := make(chan struct{})
+	send := make(chan struct{})
+
+	resp := &response{}
+	timeout := c.opt.HandleTimeout
+
+	go func() {
+		// 此处真正执行代码逻辑
+		err := req.svc.call(req.mType, req.argv, req.replyv)
+		called <- struct{}{}
+		if err != nil {
+			req.h.Error = err.Error()
+
+			resp.h = req.h
+			resp.body = invalidRequest
+
+			c.respChan <- resp
+			send <- struct{}{}
+			return
+		}
+		resp.h = req.h
+		resp.body = req.replyv.Interface()
+
+		c.respChan <- resp
+		send <- struct{}{}
+	}()
+
+	/*
+		if timeout == 0 {
+			<-called
+			<-send
+			return
+		}
+	*/
+
+	select {
+	case <-time.After(timeout):
+		req.h.Error = fmt.Sprintf("rpc server: request handle timeout %s", timeout)
+		resp.h = req.h
+		resp.body = req.replyv.Interface()
+		c.respChan <- resp
+	case <-called:
+		<-send
+	}
+}
+
+func (c *Conn) handleResponse() {
+	fun := "Server.sendResponse"
+	for {
+		select {
+		case <-c.closeChan:
+			goto clear
+		case resp := <-c.respChan:
+			if resp == nil {
+				break
+			}
+
+			traceId := resp.h.TraceId
+			err := c.Write(resp.h, resp.body)
+			if err != nil {
+				log.Errorf(traceId, "%s rpc server write response failed error:%v", fun, err)
+			}
+		}
+	}
+
+clear:
+	close(c.respChan)
+	for resp := range c.respChan {
+		if resp == nil {
+			break
+		}
+
+		traceId := resp.h.TraceId
+		err := c.Write(resp.h, resp.body)
+		if err != nil {
+			log.Errorf(traceId, "%s rpc server write response failed error:%v", fun, err)
+		}
+	}
+	err := c.conn.Close()
+	if err != nil {
+		log.Errorf("Close", "Conn:%d close failed err:%v", c.fd, err)
+	}
+}
+
+func (c *Conn) serveCodec0() {
 	//fun := "Server.serveCodec"
 	sending := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
@@ -200,14 +363,15 @@ func (c *Conn) Read(msg *lcode.Message) error {
 func (c *Conn) readRequest() (*request, error) {
 	fun := "Server.readRequest"
 
+	req := &request{}
 	msg := &lcode.Message{H: &lcode.Header{}}
 	err := c.Read(msg)
 	if err != nil {
-		return nil, err
+		return req, err
 	}
 	traceId := msg.H.TraceId
 
-	req := &request{h: msg.H}
+	req.h = msg.H
 	req.svc, req.mType, err = c.s.findService(msg.H.ServiceMethod)
 	if err != nil {
 		log.Errorf(traceId, "%s findService failed serviceMethod:%s err:%v", fun, msg.H.ServiceMethod, err)
@@ -330,7 +494,7 @@ func (c *Conn) Write(h *lcode.Header, body interface{}) (err error) {
 	fun := "Conn.Write"
 	defer func() {
 		if err != nil {
-			_ = c.conn.Close()
+			c.Close()
 		}
 	}()
 
@@ -340,6 +504,7 @@ func (c *Conn) Write(h *lcode.Header, body interface{}) (err error) {
 	msg := &lcode.Message{}
 	msg.H = h
 	msg.B = bs
+	traceId := h.TraceId
 
 	bs, err = msg.Pack()
 	if err != nil {
@@ -349,7 +514,7 @@ func (c *Conn) Write(h *lcode.Header, body interface{}) (err error) {
 	dataBuf := GetBuffer()
 	err = binary.Write(dataBuf, binary.BigEndian, uint32(len(bs)))
 	if err != nil {
-		log.Errorf("CW", "%s binary Write len buffer:%v", fun, err)
+		log.Errorf(traceId, "%s binary Write len buffer:%v", fun, err)
 		return
 	}
 
@@ -358,14 +523,45 @@ func (c *Conn) Write(h *lcode.Header, body interface{}) (err error) {
 
 	n, err = c.conn.Write(tbs)
 	if err != nil {
-		log.Errorf("CW", "%s rpc codec: json error write : %d total :%v", fun, n, err)
+		log.Errorf(traceId, "%s rpc codec: json error write : %d total :%v", fun, n, err)
 		return
 	}
 
 	n, err = c.conn.Write(bs)
 	if err != nil {
-		log.Errorf("CW", "%s rpc codec: json error write : %d buffer :%v", fun, n, err)
+		log.Errorf(traceId, "%s rpc codec: json error write : %d buffer :%v", fun, n, err)
 	}
 
 	return
+}
+
+func (c *Conn) Close() {
+	if atomic.LoadInt32(&c.state) == StateClosed {
+		return
+	}
+
+	atomic.StoreInt32(&c.state, StateClosed)
+	c.die <- struct{}{}
+}
+
+func (c *Conn) close() {
+	<-c.die
+	// 假定开启的goroutine不会超过65535
+	for i := 0; i < 64; i++ {
+		c.closeChan <- true
+	}
+
+}
+
+func socketFD(conn net.Conn) int {
+	//tls := reflect.TypeOf(conn.UnderlyingConn()) == reflect.TypeOf(&tls.Conn{})
+	// Extract the file descriptor associated with the connection
+	//connVal := reflect.Indirect(reflect.ValueOf(conn)).FieldByName("conn").Elem()
+	tcpConn := reflect.Indirect(reflect.ValueOf(conn)).FieldByName("conn")
+	//if tls {
+	//	tcpConn = reflect.Indirect(tcpConn.Elem())
+	//}
+	fdVal := tcpConn.FieldByName("fd")
+	pfdVal := reflect.Indirect(fdVal).FieldByName("pfd")
+	return int(pfdVal.FieldByName("Sysfd").Int())
 }
