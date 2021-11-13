@@ -1,8 +1,11 @@
 package models
 
 import (
-	proto "github.com/golang/protobuf/proto"
+	"math/rand"
 	"sort"
+	"time"
+
+	proto "github.com/golang/protobuf/proto"
 )
 
 type GogoProtoColorGroup struct {
@@ -35,6 +38,11 @@ func (g *Gogo) Demo(req GogoProtoColorGroup, resp *GogoProtoColorGroupRsp) error
 	}
 	resp.Id = new(int32)
 	*resp.Id = (*req.Id) / 3
+	k := rand.Intn(500)
+	if k < 50 {
+		k = 50
+	}
 	sort.Strings(req.Colors)
+	time.Sleep(time.Duration(k) * time.Millisecond)
 	return nil
 }

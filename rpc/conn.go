@@ -273,7 +273,7 @@ func (c *Conn) handleResponse() {
 	}
 
 clear:
-	close(c.respChan)
+	c.respChan <- nil
 	for resp := range c.respChan {
 		if resp == nil {
 			break
@@ -551,6 +551,11 @@ func (c *Conn) close() {
 		c.closeChan <- true
 	}
 
+	time.Sleep(3 * time.Second)
+	close(c.respChan)
+	close(c.reqChan)
+	close(c.closeChan)
+	close(c.die)
 }
 
 func socketFD(conn net.Conn) int {
