@@ -49,7 +49,7 @@ func main() {
 		numBytesRead, err := syscall.Read(s.FileDescriptor, data)
 		if err != nil {
 			numBytesRead = 0
-			fmt.Println("Syscall read failed err", err)
+			fmt.Println("Syscall read failed err", numBytesRead, err)
 			return
 		}
 
@@ -61,7 +61,7 @@ func main() {
 			return
 		}
 
-		fmt.Println("Accept", total, numBytesRead)
+		//fmt.Println("Accept", total, numBytesRead)
 		fun := "Accept"
 		err = json.Unmarshal(data, &opt)
 		if err != nil {
@@ -73,13 +73,13 @@ func main() {
 			log.Errorf("", "%s rpc server invalid magic number %x", fun, opt.MagicNumber)
 			return
 		}
-		fmt.Println("Opt", opt)
+		//fmt.Println("Opt", opt)
 
 		reader := bufio.NewReader(s)
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil || strings.TrimSpace(line) == "" {
-				fmt.Println("ERR", err)
+				fmt.Println("ERR", err, s.FileDescriptor)
 				break
 			}
 			fmt.Println(line)

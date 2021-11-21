@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -55,35 +56,41 @@ func main() {
 	network := "tcp"
 	addr := ":8082"
 
-	conn, err := net.DialTimeout(network, addr, 5*time.Second)
-	if err != nil {
-		log.Errorf("", "%s DialTimeout failed network:%s addr:%s err:%v", fun, network, addr, err)
-		return
-	}
+	wg := sync.WaitGroup{}
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			conn, err := net.DialTimeout(network, addr, 5*time.Second)
+			if err != nil {
+				fmt.Printf("%s DialTimeout failed network:%s addr:%s err:%v", fun, network, addr, err)
+				return
+			}
 
-	defer func() {
-		if err != nil {
-		}
-		_ = conn.Close()
-	}()
+			defer func() {
+				_ = conn.Close()
+			}()
 
-	var n int
-	pkg := PackHeader()
-	if len(pkg) == 0 {
-		fmt.Println("PH failed")
-		return
-	}
-	n, err = conn.Write(pkg)
-	if err != nil {
-		log.Errorf("", "%s rpc client options failed write n:%d err:%v", fun, n, err)
-		_ = conn.Close()
-		return
-	}
+			var n int
+			pkg := PackHeader()
+			if len(pkg) == 0 {
+				fmt.Println("PH failed")
+				return
+			}
+			n, err = conn.Write(pkg)
+			if err != nil {
+				fmt.Printf("%s rpc client options failed write n:%d err:%v\n", fun, n, err)
+				return
+			}
 
-	for i := 0; i < 10; i++ {
-		buf := []byte(fmt.Sprintf("ping%d\n", i))
-		conn.Write(buf)
+			for j := 0; j < 3; j++ {
+				buf := []byte(fmt.Sprintf("ping%d\n", i+j))
+				conn.Write(buf)
+			}
+			time.Sleep(1 * time.Second)
+		}(i * 100)
 	}
+	wg.Wait()
 }
 
 /* vim: set tabstop=4 set shiftwidth=4 */

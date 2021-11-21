@@ -65,6 +65,7 @@ func (eventLoop *EventLoop) Handle(handler Handler) {
 			currentEvent := newEvents[i]
 			eventFileDescriptor := int(currentEvent.Ident)
 
+			fmt.Println("event", eventFileDescriptor)
 			if currentEvent.Flags&syscall.EV_EOF != 0 {
 				// client closing connection
 				fmt.Println("Close ", eventFileDescriptor)
@@ -94,7 +95,7 @@ func (eventLoop *EventLoop) Handle(handler Handler) {
 				if err != nil || socketEventRegistered == -1 {
 					continue
 				}
-				fmt.Println("Accept fd", eventFileDescriptor)
+				fmt.Println("Accept fd", eventFileDescriptor, "nfd", socketConnection, "reg", socketEventRegistered)
 
 			} else if currentEvent.Filter&syscall.EVFILT_READ != 0 {
 				// data available -> forward to handler
